@@ -1,0 +1,30 @@
+{
+  "name": "fengshui-tool",
+  "version": "1.0.0",
+  "description": "基于24山的专业风水测量工具软件",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "风水",
+    "24山",
+    "测量工具",
+    "罗盘"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "expo": "^54.0.0",
+    "expo-sensors": "~13.0.8",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "0.76.1",
+    "react-native-web": "~0.19.12",
+    "@expo/metro-runtime": "~4.0.0"
+  }
+}
