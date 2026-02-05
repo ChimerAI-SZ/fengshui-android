@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.fengshui.app">
+
+    <!-- 权限 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 可声明需要加速器/磁力计硬件（可选） -->
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:label="FengShuiApp"
+        android:theme="@style/Theme.AppCompat.Light">
+        <!-- 主 Activity 由现有工程提供，此处不重复声明 -->
+    </application>
+
+</manifest>
