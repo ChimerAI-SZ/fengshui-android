@@ -4,6 +4,7 @@ package com.fengshui.app.map.abstraction
 data class UniversalLatLng(val latitude: Double, val longitude: Double)
 data class UniversalLatLngBounds(val southwest: UniversalLatLng, val northeast: UniversalLatLng)
 data class CameraPosition(val target: UniversalLatLng, val zoom: Float)
+data class ScreenPoint(val x: Float, val y: Float)
 
 enum class MapType {
     VECTOR,
@@ -20,8 +21,11 @@ interface MapProvider {
     fun animateCamera(target: UniversalLatLng, zoom: Float)
     fun animateCameraToBounds(bounds: UniversalLatLngBounds, padding: Int = 0)
     fun screenLocationToLatLng(x: Float, y: Float): UniversalLatLng
+    fun latLngToScreenLocation(position: UniversalLatLng): ScreenPoint
+    fun onCameraChange(callback: (CameraPosition) -> Unit)
     fun onCameraChangeFinish(callback: (CameraPosition) -> Unit)
     fun setMapType(type: MapType)
     fun zoomIn()
     fun zoomOut()
+    fun getCameraPosition(): CameraPosition?  // 获取当前相机位置（地图中心）
 }

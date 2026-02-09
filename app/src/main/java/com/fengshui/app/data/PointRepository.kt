@@ -140,4 +140,56 @@ class PointRepository(private val context: Context) {
         savePoints(list)
         return p
     }
+
+    fun updatePoint(point: FengShuiPoint) {
+        val list = loadPoints().toMutableList()
+        val index = list.indexOfFirst { it.id == point.id }
+        if (index >= 0) {
+            list[index] = point
+            savePoints(list)
+        }
+    }
+
+    fun deletePoint(pointId: String) {
+        val list = loadPoints().toMutableList()
+        list.removeAll { it.id == pointId }
+        savePoints(list)
+    }
+
+    fun getPointById(pointId: String): FengShuiPoint? {
+        return loadPoints().find { it.id == pointId }
+    }
+
+    // Phase 3: 按案例获取点位
+    fun getPointsByCase(caseId: String): List<FengShuiPoint> {
+        return loadPoints().filter { it.groupId == caseId }
+    }
+
+    fun getPointsByCaseAndType(caseId: String, type: PointType): List<FengShuiPoint> {
+        return loadPoints().filter { it.groupId == caseId && it.type == type }
+    }
+
+    fun deletePointsByCase(caseId: String) {
+        val list = loadPoints().toMutableList()
+        list.removeAll { it.groupId == caseId }
+        savePoints(list)
+    }
+
+    // Phase 3: 案例管理方法
+    fun updateProject(project: Project) {
+        val list = loadProjects().toMutableList()
+        val index = list.indexOfFirst { it.id == project.id }
+        if (index >= 0) {
+            list[index] = project
+            saveProjects(list)
+        }
+    }
+
+    fun deleteProject(projectId: String) {
+        val list = loadProjects().toMutableList()
+        list.removeAll { it.id == projectId }
+        saveProjects(list)
+        // 级联删除该案例下的所有点位
+        deletePointsByCase(projectId)
+    }
 }

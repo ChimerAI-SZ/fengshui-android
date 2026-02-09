@@ -15,6 +15,12 @@ android {
         versionName "0.1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // API Key placeholders from local.properties
+        manifestPlaceholders = [
+                GOOGLE_MAPS_API_KEY: project.findProperty("GOOGLE_MAPS_API_KEY") ?: "PLACEHOLDER",
+                AMAP_API_KEY       : project.findProperty("AMAP_API_KEY") ?: "PLACEHOLDER"
+        ]
     }
 
     buildTypes {
@@ -30,7 +36,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = '11'
+        jvmTarget = "11"
     }
 
     buildFeatures {
@@ -38,31 +44,54 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.0'
+        kotlinCompilerExtensionVersion = "1.5.10"
     }
 }
 
 dependencies {
-    // Kotlin
-    implementation 'androidx.core:core-ktx:1.10.1'
+
+    // ---------- 基础 ----------
+    implementation "androidx.core:core-ktx:1.10.1"
+
+    // ========== ✅ COMPOSE（BOM 统一版本，**关键修复点**） ==========
+    implementation platform("androidx.compose:compose-bom:2024.10.00")
+    androidTestImplementation platform("androidx.compose:compose-bom:2024.10.00")
     
-    // Compose
-    implementation 'androidx.activity:activity-compose:1.7.2'
-    implementation 'androidx.compose.ui:ui:1.5.0'
-    implementation 'androidx.compose.material3:material3:1.1.0'
-    implementation 'androidx.compose.foundation:foundation:1.5.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.6.1'
-    
-    // Android (lifecycle, location, sensors)
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.1'
-    implementation 'com.google.android.gms:play-services-location:21.0.1'
-    
-    // JSON
-    implementation 'org.json:json:20230227'
-    
-    // Testing
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    androidTestImplementation 'androidx.compose.ui:ui-test-junit4:1.5.0'
+    // 显式指定与 Kotlin 1.9.22 兼容的 Compose Compiler
+    implementation "androidx.compose.compiler:compiler:1.5.10"
+
+    implementation "androidx.activity:activity-compose:1.9.0"
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.compose.ui:ui-tooling-preview"
+    implementation "androidx.compose.foundation:foundation"
+    implementation "androidx.compose.material3:material3"
+    implementation "androidx.lifecycle:lifecycle-runtime-compose:2.8.2"
+
+    // 可选（如果你真的在用 ViewBinding + Compose）
+    implementation "androidx.compose.ui:ui-viewbinding"
+
+    debugImplementation "androidx.compose.ui:ui-tooling"
+    debugImplementation "androidx.compose.ui:ui-test-manifest"
+    androidTestImplementation "androidx.compose.ui:ui-test-junit4"
+
+    // ---------- 设备能力 ----------
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.2"
+    implementation "com.google.android.gms:play-services-location:21.0.1"
+
+    // ---------- 地图 ----------
+    implementation "com.google.android.gms:play-services-maps:18.2.0"
+    implementation "com.amap.api:3dmap:9.7.0"
+
+    // ---------- 网络 & JSON ----------
+    implementation "org.json:json:20230227"
+    implementation "com.squareup.retrofit2:retrofit:2.9.0"
+    implementation "com.squareup.retrofit2:converter-gson:2.9.0"
+    implementation "com.squareup.okhttp3:okhttp:4.11.0"
+    implementation "com.squareup.okhttp3:logging-interceptor:4.11.0"
+    implementation "com.google.code.gson:gson:2.10.1"
+
+    // ---------- 测试 ----------
+    testImplementation "junit:junit:4.13.2"
+    androidTestImplementation "androidx.test.ext:junit:1.1.5"
+    androidTestImplementation "androidx.test.espresso:espresso-core:3.5.1"
 }

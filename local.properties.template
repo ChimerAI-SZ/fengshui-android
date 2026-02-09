@@ -1,0 +1,18 @@
+# local.properties.template
+# 
+# 将此文件复制为 local.properties，并填入实际的 API Key
+# DO NOT COMMIT local.properties TO GIT - it's in .gitignore
+#
+
+# Google Maps API Key
+# 获取方式：见 DEPLOYMENT_GUIDE.md
+# 此应用使用 Google Places API（搜索）和 Geocoding API（地理编码）
+GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
+
+# Amap (高德地图) API Key
+# 获取方式：见 DEPLOYMENT_GUIDE.md
+# 此应用使用高德文本搜索和地理编码 API
+AMAP_API_KEY=YOUR_AMAP_API_KEY_HERE
+
+# Android SDK 位置（如需要）
+# sdk.dir=/path/to/android/sdk

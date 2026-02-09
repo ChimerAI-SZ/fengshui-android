@@ -1,14 +1,10 @@
 package com.fengshui.app.map.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,16 +29,12 @@ fun MapControlButtons(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
     ) {
-        IconButton(onClick = onZoomIn) {
-            Button(onClick = onZoomIn, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) {
-                Text("+", color = Color.White)
-            }
+        Button(onClick = onZoomIn, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) {
+            Text("+", color = Color.White)
         }
 
-        IconButton(onClick = onZoomOut) {
-            Button(onClick = onZoomOut, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) {
-                Text("-", color = Color.White)
-            }
+        Button(onClick = onZoomOut, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) {
+            Text("-", color = Color.White)
         }
 
         val label = if (currentMapType == MapType.VECTOR) "卫星" else "矢量"
