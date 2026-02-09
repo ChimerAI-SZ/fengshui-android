@@ -81,4 +81,7 @@ web-build/
 .env.production.local
 
 # TypeScript
-*.tsbuildinfo
+*.tsbuildinfo# Build outputs
+*.apk
+android/app/build/
+build/
