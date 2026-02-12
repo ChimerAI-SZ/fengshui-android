@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Auto-sync: after each local commit, push current branch to its upstream.
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+[ -z "$branch" ] && exit 0
+[ "$branch" = "HEAD" ] && exit 0
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null)"
+
+if [ -z "$upstream" ]; then
+  git push -u origin "$branch"
+else
+  git push
+fi
