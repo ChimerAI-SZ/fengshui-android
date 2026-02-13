@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.fengshui.app.map.abstraction.MapProviderType
 import com.fengshui.app.map.abstraction.MapType
@@ -33,6 +34,8 @@ fun MapControlButtons(
     onSwitchProvider: (MapProviderType) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val providerButtonWidth = 132.dp
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
@@ -50,8 +53,17 @@ fun MapControlButtons(
         } else {
             stringResource(id = R.string.map_type_vector_short)
         }
-        Button(onClick = { onToggleMapType(if (currentMapType == MapType.VECTOR) MapType.SATELLITE else MapType.VECTOR) }, modifier = Modifier.size(64.dp)) {
-            Text(label)
+        Button(
+            onClick = { onToggleMapType(if (currentMapType == MapType.VECTOR) MapType.SATELLITE else MapType.VECTOR) },
+            modifier = Modifier.size(width = providerButtonWidth, height = 64.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+        ) {
+            Text(
+                text = label,
+                maxLines = 1,
+                softWrap = false,
+                fontSize = 14.sp
+            )
         }
 
         val googleLabel = stringResource(id = R.string.provider_google_map_short)
@@ -59,7 +71,8 @@ fun MapControlButtons(
         Button(
             enabled = hasGoogleMap,
             onClick = { onSwitchProvider(MapProviderType.GOOGLE) },
-            modifier = Modifier.size(72.dp),
+            modifier = Modifier.size(width = providerButtonWidth, height = 72.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             colors = if (googleSelected) {
                 ButtonDefaults.buttonColors()
             } else {
@@ -69,7 +82,12 @@ fun MapControlButtons(
                 )
             }
         ) {
-            Text(googleLabel)
+            Text(
+                text = googleLabel,
+                maxLines = 1,
+                softWrap = false,
+                fontSize = 14.sp
+            )
         }
 
         val amapLabel = stringResource(id = R.string.provider_amap_short)
@@ -77,7 +95,8 @@ fun MapControlButtons(
         Button(
             enabled = hasAmapMap,
             onClick = { onSwitchProvider(MapProviderType.AMAP) },
-            modifier = Modifier.size(72.dp),
+            modifier = Modifier.size(width = providerButtonWidth, height = 72.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             colors = if (amapSelected) {
                 ButtonDefaults.buttonColors()
             } else {
@@ -87,7 +106,12 @@ fun MapControlButtons(
                 )
             }
         ) {
-            Text(amapLabel)
+            Text(
+                text = amapLabel,
+                maxLines = 1,
+                softWrap = false,
+                fontSize = 14.sp
+            )
         }
     }
 }
