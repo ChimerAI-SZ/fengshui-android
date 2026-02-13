@@ -9,6 +9,8 @@
     <string name="nav_info">Info</string>
     <string name="lang_toggle_zh">中文</string>
     <string name="lang_toggle_en">En</string>
+    <string name="lang_short_zh">中</string>
+    <string name="lang_short_en">EN</string>
     <string name="menu_open">Menu</string>
     <string name="menu_collapse">Collapse</string>
     <string name="action_confirm">OK</string>
@@ -79,6 +81,8 @@
 
     <string name="map_type_satellite">Satellite</string>
     <string name="map_type_vector">Vector</string>
+    <string name="map_type_satellite_short">Sat</string>
+    <string name="map_type_vector_short">Map</string>
 
     <string name="label_origin">Origin</string>
     <string name="label_destination">Destination</string>

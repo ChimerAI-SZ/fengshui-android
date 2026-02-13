@@ -1,6 +1,7 @@
 package com.fengshui.app.screens
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -17,12 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -37,6 +38,7 @@ import com.fengshui.app.screens.SearchScreen
 import com.fengshui.app.screens.InfoScreen
 import com.fengshui.app.R
 import com.fengshui.app.utils.ApiKeyConfig
+import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 
 /**
@@ -96,30 +98,26 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(id = R.string.app_name)) },
                 actions = {
-                    TextButton(
-                        onClick = {
-                            isChinese = !isChinese
-                            val tag = if (isChinese) "zh-CN" else "en"
-                            AppCompatDelegate.setApplicationLocales(
-                                LocaleListCompat.forLanguageTags(tag)
-                            )
+                    LanguageTogglePill(
+                        isChinese = isChinese,
+                        onSelectChinese = {
+                            if (!isChinese) {
+                                isChinese = true
+                                AppCompatDelegate.setApplicationLocales(
+                                    LocaleListCompat.forLanguageTags("zh-CN")
+                                )
+                            }
                         },
-                        modifier = Modifier
-                            .padding(end = 8.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                    ) {
-                        Text(
-                            text = if (isChinese) {
-                                stringResource(id = R.string.lang_toggle_en)
-                            } else {
-                                stringResource(id = R.string.lang_toggle_zh)
-                            },
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+                        onSelectEnglish = {
+                            if (isChinese) {
+                                isChinese = false
+                                AppCompatDelegate.setApplicationLocales(
+                                    LocaleListCompat.forLanguageTags("en")
+                                )
+                            }
+                        },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
                 }
             )
         },
@@ -195,6 +193,59 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                     InfoScreen(modifier = Modifier.fillMaxSize())
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LanguageTogglePill(
+    isChinese: Boolean,
+    onSelectChinese: () -> Unit,
+    onSelectEnglish: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val zhLabel = stringResource(id = R.string.lang_short_zh)
+    val enLabel = stringResource(id = R.string.lang_short_en)
+
+    Row(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    color = if (isChinese) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(10.dp)
+                )
+                .clickable(onClick = onSelectChinese)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = zhLabel,
+                color = if (isChinese) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .background(
+                    color = if (isChinese) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(10.dp)
+                )
+                .clickable(onClick = onSelectEnglish)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = enLabel,
+                color = if (isChinese) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary
+            )
         }
     }
 }

@@ -9,6 +9,8 @@
     <string name="nav_info">说明</string>
     <string name="lang_toggle_zh">中文</string>
     <string name="lang_toggle_en">En</string>
+    <string name="lang_short_zh">中</string>
+    <string name="lang_short_en">EN</string>
     <string name="menu_open">菜单</string>
     <string name="menu_collapse">收起</string>
     <string name="action_confirm">确定</string>
@@ -79,6 +81,8 @@
 
     <string name="map_type_satellite">卫星</string>
     <string name="map_type_vector">矢量</string>
+    <string name="map_type_satellite_short">卫星</string>
+    <string name="map_type_vector_short">地图</string>
 
     <string name="label_origin">原点</string>
     <string name="label_destination">终点</string>

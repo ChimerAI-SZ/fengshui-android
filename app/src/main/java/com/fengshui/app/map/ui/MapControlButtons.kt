@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -44,30 +46,48 @@ fun MapControlButtons(
         }
 
         val label = if (currentMapType == MapType.VECTOR) {
-            stringResource(id = R.string.map_type_satellite)
+            stringResource(id = R.string.map_type_satellite_short)
         } else {
-            stringResource(id = R.string.map_type_vector)
+            stringResource(id = R.string.map_type_vector_short)
         }
         Button(onClick = { onToggleMapType(if (currentMapType == MapType.VECTOR) MapType.SATELLITE else MapType.VECTOR) }, modifier = Modifier.size(64.dp)) {
             Text(label)
         }
 
         val googleLabel = stringResource(id = R.string.provider_google_map_short)
+        val googleSelected = currentProviderType == MapProviderType.GOOGLE
         Button(
             enabled = hasGoogleMap,
             onClick = { onSwitchProvider(MapProviderType.GOOGLE) },
-            modifier = Modifier.size(72.dp)
+            modifier = Modifier.size(72.dp),
+            colors = if (googleSelected) {
+                ButtonDefaults.buttonColors()
+            } else {
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
         ) {
-            Text(if (currentProviderType == MapProviderType.GOOGLE) "[$googleLabel]" else googleLabel)
+            Text(googleLabel)
         }
 
         val amapLabel = stringResource(id = R.string.provider_amap_short)
+        val amapSelected = currentProviderType == MapProviderType.AMAP
         Button(
             enabled = hasAmapMap,
             onClick = { onSwitchProvider(MapProviderType.AMAP) },
-            modifier = Modifier.size(72.dp)
+            modifier = Modifier.size(72.dp),
+            colors = if (amapSelected) {
+                ButtonDefaults.buttonColors()
+            } else {
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
         ) {
-            Text(if (currentProviderType == MapProviderType.AMAP) "[$amapLabel]" else amapLabel)
+            Text(amapLabel)
         }
     }
 }
