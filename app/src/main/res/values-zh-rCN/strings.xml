@@ -183,6 +183,7 @@
     <string name="err_add_destination_failed">添加终点失败</string>
     <string name="err_add_point_failed">添加点位失败</string>
     <string name="err_enter_keyword">请输入关键词</string>
+    <string name="google_satellite_fallback_to_amap">当前区域谷歌卫星图受限，已自动切换到高德卫星图。</string>
 
     <string name="add_point_title">添加点位</string>
     <string name="add_point_name_label">点位名称</string>

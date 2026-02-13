@@ -183,6 +183,7 @@
     <string name="err_add_destination_failed">Failed to add destination</string>
     <string name="err_add_point_failed">Failed to add point</string>
     <string name="err_enter_keyword">Enter a keyword</string>
+    <string name="google_satellite_fallback_to_amap">Google satellite is limited in this area. Switched to Amap satellite.</string>
 
     <string name="add_point_title">Add point</string>
     <string name="add_point_name_label">Point name</string>

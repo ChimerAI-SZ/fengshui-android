@@ -71,6 +71,7 @@ import com.fengshui.app.map.abstraction.MapProvider
 import com.fengshui.app.map.abstraction.MapProviderType
 import com.fengshui.app.map.abstraction.MapType
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.map.abstraction.MapProviderSelector
 import com.fengshui.app.map.ui.MapControlButtons
 import com.fengshui.app.map.ui.CrosshairModeUI
 import com.fengshui.app.map.ui.LifeCircleOriginSelectDialog
@@ -197,6 +198,7 @@ fun MapScreen(
     val msgRegisterInvalid = stringResource(id = R.string.register_invalid)
     val msgSelectThreeOrigins = stringResource(id = R.string.err_select_three_origins)
     val msgEnterNewCaseName = stringResource(id = R.string.err_enter_new_case_name)
+    val msgGoogleSatelliteFallback = stringResource(id = R.string.google_satellite_fallback_to_amap)
     
     // 地图是否已初始化
     val mapReady = remember { mutableStateOf(false) }
@@ -857,6 +859,22 @@ fun MapScreen(
                             onZoomOut = { mapProvider.zoomOut() },
                             onToggleMapType = { type ->
                                 currentMapType = type
+                                if (
+                                    type == MapType.SATELLITE &&
+                                    mapProviderType == MapProviderType.GOOGLE &&
+                                    hasAmapMap
+                                ) {
+                                    val center = mapProvider.getCameraPosition()?.target
+                                    val inChina = center?.let {
+                                        MapProviderSelector.isInChina(it.latitude, it.longitude)
+                                    } == true
+                                    if (inChina) {
+                                        onMapProviderSwitch(MapProviderType.AMAP)
+                                        trialMessage = msgGoogleSatelliteFallback
+                                        showTrialDialog = true
+                                        return@MapControlButtons
+                                    }
+                                }
                                 mapProvider.setMapType(type)
                             },
                             onSwitchProvider = onMapProviderSwitch
