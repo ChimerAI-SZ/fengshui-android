@@ -163,11 +163,19 @@ class GoogleMapProvider(
         pendingMapType = type
         val googleMap = mGoogleMap ?: return
 
-        val mapType = when (type) {
+        val targetMapType = when (type) {
             MapType.VECTOR -> GoogleMap.MAP_TYPE_NORMAL
-            MapType.SATELLITE -> GoogleMap.MAP_TYPE_SATELLITE
+            // Use HYBRID for better device compatibility (satellite base + road labels).
+            MapType.SATELLITE -> GoogleMap.MAP_TYPE_HYBRID
         }
-        googleMap.mapType = mapType
+
+        if (googleMap.mapType == targetMapType) {
+            return
+        }
+
+        // Force renderer refresh on some physical devices where direct switch is ignored.
+        googleMap.mapType = GoogleMap.MAP_TYPE_NONE
+        googleMap.mapType = targetMapType
     }
     
     /**
