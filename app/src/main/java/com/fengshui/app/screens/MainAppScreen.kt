@@ -67,12 +67,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     val amapKey = ApiKeyConfig.getAmapApiKey(context)
     val hasGoogleMapKey = ApiKeyConfig.isValidKey(googleKey)
     val hasAmapKey = ApiKeyConfig.isValidKey(amapKey)
-    val isChinaLocale = Locale.getDefault().country.equals("CN", ignoreCase = true)
-    val defaultProviderType = when {
-        isChinaLocale && hasAmapKey -> MapProviderType.AMAP
-        hasGoogleMapKey -> MapProviderType.GOOGLE
-        hasAmapKey -> MapProviderType.AMAP
-        else -> MapProviderType.GOOGLE
+    val defaultProviderType = if (hasAmapKey) {
+        MapProviderType.AMAP
+    } else {
+        MapProviderType.GOOGLE
     }
     var mapProviderType by remember { mutableStateOf(defaultProviderType) }
     val googleMapProvider = remember { GoogleMapProvider(context) }
