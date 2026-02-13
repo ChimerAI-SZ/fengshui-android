@@ -3,6 +3,24 @@ plugins {
     id 'kotlin-android'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream ->
+        localProperties.load(stream)
+    }
+}
+
+def hasReleaseSigning = [
+        "RELEASE_STORE_FILE",
+        "RELEASE_STORE_PASSWORD",
+        "RELEASE_KEY_ALIAS",
+        "RELEASE_KEY_PASSWORD"
+].every { key ->
+    def value = localProperties.getProperty(key)
+    value != null && !value.trim().isEmpty()
+}
+
 android {
     namespace 'com.fengshui.app'
     compileSdk 34
@@ -18,14 +36,28 @@ android {
 
         // API Key placeholders from local.properties
         manifestPlaceholders = [
-                GOOGLE_MAPS_API_KEY: project.findProperty("GOOGLE_MAPS_API_KEY") ?: "PLACEHOLDER",
-                AMAP_API_KEY       : project.findProperty("AMAP_API_KEY") ?: "PLACEHOLDER"
+                GOOGLE_MAPS_API_KEY: localProperties.getProperty("GOOGLE_MAPS_API_KEY", "PLACEHOLDER"),
+                AMAP_API_KEY       : localProperties.getProperty("AMAP_API_KEY", "PLACEHOLDER")
         ]
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(localProperties.getProperty("RELEASE_STORE_FILE"))
+                storePassword localProperties.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias localProperties.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword localProperties.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -52,6 +84,8 @@ dependencies {
 
     // ---------- 基础 ----------
     implementation "androidx.core:core-ktx:1.10.1"
+    implementation "com.google.android.material:material:1.12.0"
+    implementation "androidx.appcompat:appcompat:1.7.0"
 
     // ========== ✅ COMPOSE（BOM 统一版本，**关键修复点**） ==========
     implementation platform("androidx.compose:compose-bom:2024.10.00")
@@ -66,6 +100,7 @@ dependencies {
     implementation "androidx.compose.foundation:foundation"
     implementation "androidx.compose.material3:material3"
     implementation "androidx.lifecycle:lifecycle-runtime-compose:2.8.2"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2"
 
     // 可选（如果你真的在用 ViewBinding + Compose）
     implementation "androidx.compose.ui:ui-viewbinding"

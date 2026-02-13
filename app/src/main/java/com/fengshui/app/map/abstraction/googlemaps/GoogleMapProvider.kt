@@ -32,6 +32,7 @@ class GoogleMapProvider(
     private var cameraMoveCallback: ((CameraPosition) -> Unit)? = null
     private var cameraChangeCallback: ((CameraPosition) -> Unit)? = null
     private var polylineClickCallback: ((UniversalPolyline) -> Unit)? = null
+    private var pendingMapType: MapType? = null
     
     /**
      * 设置底层 GoogleMap 对象（由 MapViewWrapper 在地图加载完成后调用）
@@ -40,6 +41,7 @@ class GoogleMapProvider(
         mGoogleMap = map
         registerCameraChangeListener()
         registerPolylineClickListener()
+        pendingMapType?.let { setMapType(it) }
     }
     
     /**
@@ -158,13 +160,14 @@ class GoogleMapProvider(
      * 切换地图类型
      */
     override fun setMapType(type: MapType) {
-        requireNotNull(mGoogleMap) { "GoogleMap not initialized" }
-        
+        pendingMapType = type
+        val googleMap = mGoogleMap ?: return
+
         val mapType = when (type) {
             MapType.VECTOR -> GoogleMap.MAP_TYPE_NORMAL
             MapType.SATELLITE -> GoogleMap.MAP_TYPE_SATELLITE
         }
-        mGoogleMap!!.mapType = mapType
+        googleMap.mapType = mapType
     }
     
     /**

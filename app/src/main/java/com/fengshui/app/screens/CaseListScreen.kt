@@ -47,12 +47,15 @@ import com.fengshui.app.data.PointRepository
 import com.fengshui.app.data.FengShuiPoint
 import com.fengshui.app.data.PointType
 import com.fengshui.app.map.ui.RenamePointDialog
+import com.fengshui.app.map.ui.RegistrationDialog
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * CaseListScreen - 堪舆案例管理界面
@@ -78,6 +81,12 @@ fun CaseListScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var projectToEdit by remember { mutableStateOf<Project?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showTrialDialog by remember { mutableStateOf(false) }
+    var showRegistrationDialog by remember { mutableStateOf(false) }
+    var trialMessage by remember { mutableStateOf("") }
+    val trialLimitMessage = stringResource(id = R.string.trial_limit_reached)
+    val registerSuccessMessage = stringResource(id = R.string.register_success)
+    val registerInvalidMessage = stringResource(id = R.string.register_invalid)
 
     // 初始化加载案例列表
     val loadProjects = {
@@ -98,8 +107,13 @@ fun CaseListScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("暂无案例", fontSize = 16.sp, color = Color.Gray)
-                    Text("点击右下角按钮创建新案例", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
+                    Text(stringResource(id = R.string.case_empty_title), fontSize = 16.sp, color = Color.Gray)
+                    Text(
+                        stringResource(id = R.string.case_empty_subtitle),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             } else {
                 // 案例列表
@@ -142,7 +156,7 @@ fun CaseListScreen(
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "创建案例")
+                Icon(Icons.Default.Add, contentDescription = stringResource(id = R.string.action_create_case))
             }
 
             // 创建案例对话框
@@ -150,9 +164,15 @@ fun CaseListScreen(
                 CreateCaseDialog(
                     onConfirm = { name, description ->
                         scope.launch {
-                            repo.createProject(name, description)
-                            loadProjects()
-                            showCreateDialog = false
+                            try {
+                                repo.createProject(name, description)
+                                loadProjects()
+                                showCreateDialog = false
+                            } catch (e: com.fengshui.app.TrialLimitException) {
+                                trialMessage = e.message ?: trialLimitMessage
+                                showCreateDialog = false
+                                showTrialDialog = true
+                            }
                         }
                     },
                     onDismiss = { showCreateDialog = false }
@@ -181,6 +201,37 @@ fun CaseListScreen(
                         projectToEdit = null
                     }
                 )
+            }
+
+            if (showTrialDialog) {
+                AlertDialog(
+                    onDismissRequest = { showTrialDialog = false },
+                    confirmButton = {
+                        TextButton(onClick = { showTrialDialog = false }) { Text(stringResource(id = R.string.action_cancel)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showRegistrationDialog = true
+                            showTrialDialog = false
+                        }) { Text(stringResource(id = R.string.action_register)) }
+                    },
+                    text = { Text(trialMessage) }
+                )
+            }
+
+            if (showRegistrationDialog) {
+                RegistrationDialog(onDismissRequest = { showRegistrationDialog = false }) { code ->
+                    scope.launch {
+                        val ok = com.fengshui.app.TrialManager.registerWithCode(context, code)
+                        trialMessage = if (ok) {
+                            registerSuccessMessage
+                        } else {
+                            registerInvalidMessage
+                        }
+                        showRegistrationDialog = false
+                        showTrialDialog = true
+                    }
+                }
             }
         }
     }
@@ -240,14 +291,19 @@ private fun CaseListItem(
                         fontSize = 14.sp
                     )
                     Text(
-                        "原点: $originCount | 终点: $destCount | 创建: $createTime",
+                        stringResource(
+                            id = R.string.case_summary,
+                            originCount,
+                            destCount,
+                            createTime
+                        ),
                         fontSize = 10.sp,
                         color = Color.Gray
                     )
                 }
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = "展开/收起"
+                    contentDescription = stringResource(id = R.string.action_expand_collapse)
                 )
             }
 
@@ -257,7 +313,7 @@ private fun CaseListItem(
                     // 案例描述
                     if (!project.description.isNullOrEmpty()) {
                         Text(
-                            "描述: ${project.description}",
+                            stringResource(id = R.string.case_description, project.description ?: ""),
                             fontSize = 11.sp,
                             color = Color.Gray,
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -267,7 +323,7 @@ private fun CaseListItem(
                     // 点位列表
                     if (points.isEmpty()) {
                         Text(
-                            "该案例中暂无点位",
+                            stringResource(id = R.string.case_no_points),
                             fontSize = 11.sp,
                             color = Color.Gray,
                             modifier = Modifier.padding(8.dp)
@@ -287,18 +343,30 @@ private fun CaseListItem(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "[${if (point.type == PointType.ORIGIN) "原" else "终"}] ${point.name}",
+                                            text = stringResource(
+                                                id = R.string.point_list_item_name,
+                                                if (point.type == PointType.ORIGIN) {
+                                                    stringResource(id = R.string.point_type_origin_short)
+                                                } else {
+                                                    stringResource(id = R.string.point_type_destination_short)
+                                                },
+                                                point.name
+                                            ),
                                             fontSize = 10.sp
                                         )
                                         Text(
-                                            text = "纬: %.4f, 经: %.4f".format(point.latitude, point.longitude),
+                                            text = stringResource(
+                                                id = R.string.label_coordinates,
+                                                point.latitude,
+                                                point.longitude
+                                            ),
                                             fontSize = 9.sp,
                                             color = Color.Gray,
                                             modifier = Modifier.padding(top = 2.dp)
                                         )
                                     }
                                     IconButton(onClick = { pointToRename = point }) {
-                                        Icon(Icons.Default.Edit, contentDescription = "重命名")
+                                        Icon(Icons.Default.Edit, contentDescription = stringResource(id = R.string.action_rename))
                                     }
                                     IconButton(onClick = {
                                         scope.launch {
@@ -306,7 +374,7 @@ private fun CaseListItem(
                                             reloadPoints()
                                         }
                                     }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "删除点位")
+                                        Icon(Icons.Default.Delete, contentDescription = stringResource(id = R.string.action_delete_point))
                                     }
                                 }
                             }
@@ -324,7 +392,7 @@ private fun CaseListItem(
                             onClick = onEdit, 
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("编辑")
+                            Text(stringResource(id = R.string.action_edit))
                         }
                         Button(
                             onClick = { onQuickAddPoint(project.id) },
@@ -332,7 +400,7 @@ private fun CaseListItem(
                                 .weight(1f)
                                 .padding(start = 8.dp, end = 8.dp)
                         ) {
-                            Text("快速加点")
+                            Text(stringResource(id = R.string.action_quick_add_point))
                         }
                         Button(
                             onClick = onDelete,
@@ -340,7 +408,7 @@ private fun CaseListItem(
                                 .weight(1f)
                                 .padding(start = 8.dp)
                         ) {
-                            Text("删除")
+                            Text(stringResource(id = R.string.action_delete))
                         }
                     }
                 }
@@ -373,13 +441,13 @@ private fun CreateCaseDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建新案例") },
+        title = { Text(stringResource(id = R.string.dialog_create_case_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 TextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("案例名称") },
+                    label = { Text(stringResource(id = R.string.label_case_name)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -388,7 +456,7 @@ private fun CreateCaseDialog(
                 TextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("案例描述（可选）") },
+                    label = { Text(stringResource(id = R.string.label_case_description_optional)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -404,12 +472,12 @@ private fun CreateCaseDialog(
                     }
                 }
             ) {
-                Text("创建")
+                Text(stringResource(id = R.string.action_create))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(id = R.string.action_cancel))
             }
         }
     )
@@ -426,13 +494,13 @@ private fun EditCaseDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("编辑案例") },
+        title = { Text(stringResource(id = R.string.dialog_edit_case_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 TextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("案例名称") },
+                    label = { Text(stringResource(id = R.string.label_case_name)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -441,7 +509,7 @@ private fun EditCaseDialog(
                 TextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("案例描述") },
+                    label = { Text(stringResource(id = R.string.label_case_description)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
@@ -457,12 +525,12 @@ private fun EditCaseDialog(
                     }
                 }
             ) {
-                Text("保存")
+                Text(stringResource(id = R.string.action_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(id = R.string.action_cancel))
             }
         }
     )

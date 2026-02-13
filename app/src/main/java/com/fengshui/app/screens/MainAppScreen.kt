@@ -3,11 +3,14 @@ package com.fengshui.app.screens
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,13 +18,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import com.fengshui.app.navigation.NavigationItem
 import com.fengshui.app.map.MapScreen
+import com.fengshui.app.map.abstraction.MapProviderType
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.map.abstraction.amap.AMapProvider
 import com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider
 import com.fengshui.app.screens.CaseListScreen
 import com.fengshui.app.screens.SearchScreen
 import com.fengshui.app.screens.InfoScreen
+import com.fengshui.app.R
+import com.fengshui.app.utils.ApiKeyConfig
+import java.util.Locale
 
 /**
  * MainAppScreen - 主应用界面
@@ -38,16 +54,75 @@ import com.fengshui.app.screens.InfoScreen
  * - 支持快速加点功能
  * - 当用户在堪舆管理中点击"快速加点"时，自动切换到地图 Tab
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppScreen(modifier: Modifier = Modifier) {
     var currentTab by remember { mutableStateOf(NavigationItem.MAP) }
     var quickAddCaseId by remember { mutableStateOf<String?>(null) }
     var searchFocus by remember { mutableStateOf<UniversalLatLng?>(null) }
     val context = LocalContext.current
-    val mapProvider = remember { GoogleMapProvider(context) }
+    val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
+    val amapKey = ApiKeyConfig.getAmapApiKey(context)
+    val hasGoogleMapKey = ApiKeyConfig.isValidKey(googleKey)
+    val hasAmapKey = ApiKeyConfig.isValidKey(amapKey)
+    val isChinaLocale = Locale.getDefault().country.equals("CN", ignoreCase = true)
+    val defaultProviderType = when {
+        isChinaLocale && hasAmapKey -> MapProviderType.AMAP
+        hasGoogleMapKey -> MapProviderType.GOOGLE
+        hasAmapKey -> MapProviderType.AMAP
+        else -> MapProviderType.GOOGLE
+    }
+    var mapProviderType by remember { mutableStateOf(defaultProviderType) }
+    val googleMapProvider = remember { GoogleMapProvider(context) }
+    val amapProvider = remember { AMapProvider(context) }
+    val mapProvider = when (mapProviderType) {
+        MapProviderType.AMAP -> amapProvider
+        MapProviderType.GOOGLE -> googleMapProvider
+    }
+    val initialLocales = AppCompatDelegate.getApplicationLocales()
+    var isChinese by remember {
+        mutableStateOf(
+            if (initialLocales.isEmpty) {
+                Locale.getDefault().language.startsWith("zh")
+            } else {
+                initialLocales[0]?.language?.startsWith("zh") == true
+            }
+        )
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(id = R.string.app_name)) },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            isChinese = !isChinese
+                            val tag = if (isChinese) "zh-CN" else "en"
+                            AppCompatDelegate.setApplicationLocales(
+                                LocaleListCompat.forLanguageTags(tag)
+                            )
+                        },
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        Text(
+                            text = if (isChinese) {
+                                stringResource(id = R.string.lang_toggle_en)
+                            } else {
+                                stringResource(id = R.string.lang_toggle_zh)
+                            },
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            )
+        },
         bottomBar = {
             NavigationBar {
                 NavigationItem.values().forEach { item ->
@@ -57,10 +132,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         icon = {
                             Icon(
                                 imageVector = item.icon,
-                                contentDescription = item.label
+                                contentDescription = stringResource(id = item.labelRes)
                             )
                         },
-                        label = { Text(item.label) }
+                        label = { Text(stringResource(id = item.labelRes)) }
                     )
                 }
             }
@@ -76,7 +151,21 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                     // MapScreen with real Google Maps (API Key from local.properties)
                     MapScreen(
                         mapProvider = mapProvider,
+                        mapProviderType = mapProviderType,
+                        hasGoogleMap = hasGoogleMapKey,
+                        hasAmapMap = hasAmapKey,
+                        onMapProviderSwitch = { targetType ->
+                            val targetAvailable = when (targetType) {
+                                MapProviderType.GOOGLE -> hasGoogleMapKey
+                                MapProviderType.AMAP -> hasAmapKey
+                            }
+                            if (targetAvailable && mapProviderType != targetType) {
+                                mapProviderType = targetType
+                            }
+                        },
                         modifier = Modifier.fillMaxSize(),
+                        quickAddCaseId = quickAddCaseId,
+                        onQuickAddConsumed = { quickAddCaseId = null },
                         focusLocation = searchFocus,
                         onFocusConsumed = { searchFocus = null }
                     )

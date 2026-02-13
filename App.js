@@ -44,6 +44,13 @@ const BAGUA = [
   { name: '兑', mountains: ['庚', '酉'], position: '西' }
 ];
 
+// 每山15度，细分为三分金（每段5度）
+const FENJIN = [
+  { name: '上分金', start: 0, end: 5 },
+  { name: '中分金', start: 5, end: 10 },
+  { name: '下分金', start: 10, end: 15 }
+];
+
 // 获取八卦信息
 const getBagua = (mountainName) => {
   return BAGUA.find(b => b.mountains.includes(mountainName));

@@ -14,13 +14,13 @@ import com.fengshui.app.map.abstraction.amap.AMapProvider
 @Composable
 fun AMapViewWrapper(
     modifier: Modifier = Modifier,
-    onMapReady: (AMapProvider) -> Unit
+    mapProvider: AMapProvider,
+    onMapReady: (AMap) -> Unit = {}
 ) {
     val context: Context = LocalContext.current
 
-    // ✅ Compose 里记住 MapView 和 Provider
+    // ✅ Compose 里记住 MapView
     val mapView = remember { MapView(context) }
-    val mapProvider = remember { AMapProvider(context) }
 
     // ✅ 生命周期绑定
     DisposableEffect(Unit) {
@@ -29,7 +29,7 @@ fun AMapViewWrapper(
         // ✅ AMap SDK v10：直接取 map（不要 getMap { } 回调）
         val aMap: AMap = mapView.map
         mapProvider.setAMap(aMap)
-        onMapReady(mapProvider)
+        onMapReady(aMap)
 
         mapView.onResume()
 

@@ -44,6 +44,9 @@ import com.fengshui.app.map.poi.GooglePlacesProvider
 import com.fengshui.app.data.PointRepository
 import com.fengshui.app.data.PointType
 import com.fengshui.app.utils.ApiKeyConfig
+import com.fengshui.app.map.ui.RegistrationDialog
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * SearchScreen - 地址搜索界面
@@ -67,6 +70,12 @@ fun SearchScreen(
     var results by remember { mutableStateOf(listOf<PoiResult>()) }
     var showCaseSelectDialog by remember { mutableStateOf(false) }
     var selectedPoi by remember { mutableStateOf<PoiResult?>(null) }
+    var showTrialDialog by remember { mutableStateOf(false) }
+    var showRegistrationDialog by remember { mutableStateOf(false) }
+    var trialMessage by remember { mutableStateOf("") }
+    val trialLimitMessage = stringResource(id = R.string.trial_limit_reached)
+    val registerSuccessMessage = stringResource(id = R.string.register_success)
+    val registerInvalidMessage = stringResource(id = R.string.register_invalid)
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val repo = remember { PointRepository(context) }
@@ -83,12 +92,10 @@ fun SearchScreen(
             else -> MockPoiProvider() // 开发模式（如果没有配置 API Key）
         }
     }
-    val providerName = remember(provider) {
-        when (provider) {
-            is GooglePlacesProvider -> "Google Places"
-            is AmapPoiProvider -> "高德地图"
-            else -> "Mock"
-        }
+    val providerName = when (provider) {
+        is GooglePlacesProvider -> stringResource(id = R.string.provider_google_places)
+        is AmapPoiProvider -> stringResource(id = R.string.provider_amap)
+        else -> stringResource(id = R.string.provider_mock)
     }
     val scope = rememberCoroutineScope()
 
@@ -112,7 +119,7 @@ fun SearchScreen(
             verticalArrangement = Arrangement.Top
         ) {
             Text(
-                "地址搜索",
+                stringResource(id = R.string.search_title),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -127,7 +134,7 @@ fun SearchScreen(
                 TextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("输入地址、地点或坐标") },
+                    label = { Text(stringResource(id = R.string.search_input_label)) },
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 8.dp),
@@ -135,7 +142,7 @@ fun SearchScreen(
                     leadingIcon = {
                         Icon(
                             Icons.Default.Search,
-                            contentDescription = "搜索"
+                            contentDescription = stringResource(id = R.string.action_search)
                         )
                     }
                 )
@@ -148,7 +155,7 @@ fun SearchScreen(
                         }
                     }
                 }) {
-                    Text("搜索")
+                    Text(stringResource(id = R.string.action_search))
                 }
             }
 
@@ -163,25 +170,43 @@ fun SearchScreen(
                     .padding(12.dp)
             ) {
                 Text(
-                    "搜索提示：",
+                    stringResource(id = R.string.search_tips_title),
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
-                Text("• 当前使用：$providerName", fontSize = 10.sp, color = Color.Gray)
-                Text("• 输入文字会自动搜索，可点击结果定位到地图", fontSize = 10.sp, color = Color.Gray)
+                Text(
+                    stringResource(id = R.string.search_tip_provider, providerName),
+                    fontSize = 10.sp,
+                    color = Color.Gray
+                )
+                Text(
+                    stringResource(id = R.string.search_tip_auto),
+                    fontSize = 10.sp,
+                    color = Color.Gray
+                )
             }
 
             // 结果列表
             if (loading) {
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(36.dp))
-                    Text("搜索中...", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
+                    Text(
+                        stringResource(id = R.string.search_loading),
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             } else if (results.isEmpty()) {
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("搜索结果将在此显示", fontSize = 14.sp, color = Color.Gray)
-                    Text("当前提供方：$providerName", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(id = R.string.search_empty), fontSize = 14.sp, color = Color.Gray)
+                    Text(
+                        stringResource(id = R.string.search_provider_label, providerName),
+                        fontSize = 10.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -192,18 +217,26 @@ fun SearchScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(poi.name, fontWeight = FontWeight.Bold)
                                 Text(poi.address ?: "", fontSize = 12.sp, color = Color.Gray)
-                                Text("${String.format("%.4f", poi.lat)}, ${String.format("%.4f", poi.lng)}", fontSize = 10.sp, color = Color.Gray)
+                                Text(
+                                    stringResource(
+                                        id = R.string.search_result_coordinates,
+                                        poi.lat,
+                                        poi.lng
+                                    ),
+                                    fontSize = 10.sp,
+                                    color = Color.Gray
+                                )
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Button(onClick = { onNavigateToMap(poi) }) {
-                                    Text("定位到地图")
+                                    Text(stringResource(id = R.string.action_locate_to_map))
                                 }
                                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(6.dp))
                                 Button(onClick = {
                                     selectedPoi = poi
                                     showCaseSelectDialog = true
                                 }) {
-                                    Text("添加到案例")
+                                    Text(stringResource(id = R.string.action_add_to_case))
                                 }
                             }
                         }
@@ -216,11 +249,11 @@ fun SearchScreen(
                 val projects = repo.loadProjects()
                 AlertDialog(
                     onDismissRequest = { showCaseSelectDialog = false; selectedPoi = null },
-                    title = { Text("选择案例以保存") },
+                    title = { Text(stringResource(id = R.string.select_case_title)) },
                     text = {
                         Column {
                             if (projects.isEmpty()) {
-                                Text("暂无案例，请先创建案例")
+                                Text(stringResource(id = R.string.case_select_empty))
                             } else {
                                 projects.forEach { p ->
                                     Row(modifier = Modifier
@@ -230,19 +263,26 @@ fun SearchScreen(
                                         Button(onClick = {
                                             // 保存为终点（默认）
                                             scope.launch {
-                                                repo.createPoint(
-                                                    selectedPoi!!.name,
-                                                    selectedPoi!!.lat,
-                                                    selectedPoi!!.lng,
-                                                    PointType.DESTINATION,
-                                                    p.id,
-                                                    selectedPoi!!.address
-                                                )
-                                                showCaseSelectDialog = false
-                                                selectedPoi = null
+                                                try {
+                                                    repo.createPoint(
+                                                        selectedPoi!!.name,
+                                                        selectedPoi!!.lat,
+                                                        selectedPoi!!.lng,
+                                                        PointType.DESTINATION,
+                                                        groupId = p.id,
+                                                        address = selectedPoi!!.address
+                                                    )
+                                                    showCaseSelectDialog = false
+                                                    selectedPoi = null
+                                                } catch (e: com.fengshui.app.TrialLimitException) {
+                                                    trialMessage = e.message ?: trialLimitMessage
+                                                    showCaseSelectDialog = false
+                                                    selectedPoi = null
+                                                    showTrialDialog = true
+                                                }
                                             }
                                         }) {
-                                            Text("保存到 '${p.name}'")
+                                            Text(stringResource(id = R.string.save_to_case, p.name))
                                         }
                                     }
                                 }
@@ -250,9 +290,42 @@ fun SearchScreen(
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { showCaseSelectDialog = false; selectedPoi = null }) { Text("取消") }
+                        TextButton(onClick = { showCaseSelectDialog = false; selectedPoi = null }) {
+                            Text(stringResource(id = R.string.action_cancel))
+                        }
                     }
                 )
+            }
+
+            if (showTrialDialog) {
+                AlertDialog(
+                    onDismissRequest = { showTrialDialog = false },
+                    confirmButton = {
+                        TextButton(onClick = { showTrialDialog = false }) { Text(stringResource(id = R.string.action_cancel)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showRegistrationDialog = true
+                            showTrialDialog = false
+                        }) { Text(stringResource(id = R.string.action_register)) }
+                    },
+                    text = { Text(trialMessage) }
+                )
+            }
+
+            if (showRegistrationDialog) {
+                RegistrationDialog(onDismissRequest = { showRegistrationDialog = false }) { code ->
+                    scope.launch {
+                        val ok = com.fengshui.app.TrialManager.registerWithCode(context, code)
+                        trialMessage = if (ok) {
+                            registerSuccessMessage
+                        } else {
+                            registerInvalidMessage
+                        }
+                        showRegistrationDialog = false
+                        showTrialDialog = true
+                    }
+                }
             }
         }
     }
@@ -278,7 +351,7 @@ fun InfoScreen(
                 .padding(16.dp)
         ) {
             Text(
-                "应用说明",
+                stringResource(id = R.string.info_title),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -286,50 +359,30 @@ fun InfoScreen(
 
             // 版本信息
             InfoSection(
-                title = "版本信息",
-                content = """
-                    应用名：24 山风水罗盘
-                    版本：1.0.0 (Phase 3)
-                    发布时间：2026-02-06
-                """.trimIndent()
+                title = stringResource(id = R.string.info_section_version_title),
+                content = stringResource(id = R.string.info_section_version_content)
             )
 
             // 功能说明
             InfoSection(
-                title = "功能说明",
-                content = """
-                    ✓ 风水罗盘：实时显示 24 山和八卦方位
-                    ✓ 点位管理：标记并管理堪舆点位
-                    ✓ 连线计算：自动计算方位角和距离
-                    ✓ 多案例：支持创建多个案例独立管理
-                    ✓ 数据持久化：所有数据自动保存
-                """.trimIndent()
+                title = stringResource(id = R.string.info_section_features_title),
+                content = stringResource(id = R.string.info_section_features_content)
             )
 
             // 使用技巧
             InfoSection(
-                title = "使用技巧",
-                content = """
-                    1. 地图界面添加点位后，左上角可查看点位列表
-                    2. 长按点位可重命名或删除
-                    3. 创建多个案例来隔离不同的堪舆分析
-                    4. 在堪舆管理中查看所有案例的详细信息
-                """.trimIndent()
+                title = stringResource(id = R.string.info_section_tips_title),
+                content = stringResource(id = R.string.info_section_tips_content)
             )
 
             // 技术信息
             InfoSection(
-                title = "技术架构",
-                content = """
-                    • 框架：Jetpack Compose + Kotlin
-                    • 地图：Google Maps SDK (可切换高德地图)
-                    • 数据：SharedPreferences + JSON
-                    • 算法：大地测量学 (Geodesic)
-                """.trimIndent()
+                title = stringResource(id = R.string.info_section_tech_title),
+                content = stringResource(id = R.string.info_section_tech_content)
             )
 
             Text(
-                "© 2026 风水罗盘应用 | 单一事实来源 (SSOT) 文档",
+                stringResource(id = R.string.info_footer),
                 fontSize = 9.sp,
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 32.dp)

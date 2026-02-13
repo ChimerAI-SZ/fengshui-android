@@ -15,4 +15,11 @@ object Prefs {
 
     fun getString(context: Context, key: String): String? =
         prefs(context).getString(key, null)
+
+    fun saveBoolean(context: Context, key: String, value: Boolean) {
+        prefs(context).edit().putBoolean(key, value).apply()
+    }
+
+    fun getBoolean(context: Context, key: String, defaultValue: Boolean = false): Boolean =
+        prefs(context).getBoolean(key, defaultValue)
 }

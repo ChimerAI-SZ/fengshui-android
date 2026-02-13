@@ -30,6 +30,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * LineInfoPanel - 连线信息面板
@@ -87,7 +89,7 @@ fun LineInfoPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "堪舆计算结果",
+                    text = stringResource(id = R.string.line_info_title),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -102,33 +104,33 @@ fun LineInfoPanel(
                 Divider(modifier = Modifier.padding(vertical = 12.dp))
 
                 // 点位信息区块
-                InfoSection(title = "点位信息") {
-                    InfoRow(label = "原点", value = originName)
-                    InfoRow(label = "终点", value = destName)
+                InfoSection(title = stringResource(id = R.string.line_info_section_points)) {
+                    InfoRow(label = stringResource(id = R.string.label_origin), value = originName)
+                    InfoRow(label = stringResource(id = R.string.label_destination), value = destName)
                     InfoCoordinate(
-                        label = "原点坐标",
+                        label = stringResource(id = R.string.label_origin_coordinates),
                         lat = originLat,
                         lng = originLng
                     )
                     InfoCoordinate(
-                        label = "终点坐标",
+                        label = stringResource(id = R.string.label_destination_coordinates),
                         lat = destLat,
                         lng = destLng
                     )
                 }
 
                 // 方位信息区块
-                InfoSection(title = "方位信息") {
-                    InfoRow(label = "方位角", value = "${"%.1f".format(bearing)}°")
-                    InfoRow(label = "24山", value = shan, backgroundColor = Color(0xFFFFF9C4))
-                    InfoRow(label = "八卦", value = bagua, backgroundColor = Color(0xFFE1F5FE))
-                    InfoRow(label = "五行", value = wuxing, backgroundColor = Color(0xFFF3E5F5))
+                InfoSection(title = stringResource(id = R.string.line_info_section_direction)) {
+                    InfoRow(label = stringResource(id = R.string.label_bearing), value = "${"%.1f".format(bearing)}°")
+                    InfoRow(label = stringResource(id = R.string.label_shan_24), value = shan, backgroundColor = Color(0xFFFFF9C4))
+                    InfoRow(label = stringResource(id = R.string.label_bagua), value = bagua, backgroundColor = Color(0xFFE1F5FE))
+                    InfoRow(label = stringResource(id = R.string.label_wuxing), value = wuxing, backgroundColor = Color(0xFFF3E5F5))
                 }
 
                 // 距离信息
-                InfoSection(title = "距离") {
+                InfoSection(title = stringResource(id = R.string.line_info_section_distance)) {
                     InfoRow(
-                        label = "直线距离",
+                        label = stringResource(id = R.string.label_distance),
                         value = String.format("%.1f m", distance),
                         backgroundColor = Color(0xFFE8F5E9)
                     )
@@ -142,7 +144,7 @@ fun LineInfoPanel(
                         .padding(8.dp)
                 ) {
                     Text(
-                        text = "💡 点击面板可展开/收起详细信息",
+                        text = stringResource(id = R.string.line_info_tip),
                         fontSize = 12.sp,
                         color = Color(0xFFF57F17)
                     )

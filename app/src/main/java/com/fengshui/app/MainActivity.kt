@@ -2,15 +2,15 @@ package com.fengshui.app
 
 import android.content.pm.PackageManager
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.fengshui.app.screens.MainAppScreen
 import com.fengshui.app.utils.PermissionHelper
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     
     // 权限请求启动器
     private val locationPermissionLauncher = registerForActivityResult(

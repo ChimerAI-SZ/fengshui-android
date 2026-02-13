@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fengshui.app.data.FengShuiPoint
 import com.fengshui.app.data.PointType
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * MultiSelectDestinationDialog - 多选终点对话框
@@ -51,7 +53,7 @@ fun MultiSelectDestinationDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("选择终点")
+            Text(stringResource(id = R.string.select_destination_title))
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -63,7 +65,7 @@ fun MultiSelectDestinationDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "暂无终点，请先在地图上添加终点",
+                            stringResource(id = R.string.no_destination_tip),
                             fontSize = 12.sp,
                             color = Color.Gray
                         )
@@ -94,12 +96,12 @@ fun MultiSelectDestinationDialog(
                     onDismiss()
                 }
             ) {
-                Text("确认")
+                Text(stringResource(id = R.string.action_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(id = R.string.action_cancel))
             }
         }
     )
@@ -139,7 +141,11 @@ private fun DestinationListItem(
                 color = Color.Black
             )
             Text(
-                text = "纬: %.4f, 经: %.4f".format(point.latitude, point.longitude),
+                text = stringResource(
+                    id = R.string.label_coordinates,
+                    point.latitude,
+                    point.longitude
+                ),
                 fontSize = 10.sp,
                 color = Color.Gray
             )

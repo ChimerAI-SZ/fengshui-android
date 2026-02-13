@@ -10,6 +10,7 @@ class PointRepository(private val context: Context) {
     companion object {
         private const val KEY_PROJECTS = "fengshui_projects"
         private const val KEY_POINTS = "fengshui_points"
+        const val GPS_ORIGIN_ID = "gps_location_origin"
     }
 
     fun saveProjects(projects: List<Project>) {
@@ -55,7 +56,9 @@ class PointRepository(private val context: Context) {
             o.put("longitude", p.longitude)
             o.put("type", p.type.name)
             o.put("groupId", p.groupId)
+            o.put("groupName", p.groupName)
             o.put("address", p.address)
+            o.put("isActive", p.isActive)
             o.put("isGPSOrigin", p.isGPSOrigin)
             o.put("isVisible", p.isVisible)
             o.put("createTime", p.createTime)
@@ -73,16 +76,18 @@ class PointRepository(private val context: Context) {
             val type = PointType.valueOf(o.getString("type"))
             res.add(
                 FengShuiPoint(
-                    o.getString("id"),
-                    o.getString("name"),
-                    o.getDouble("latitude"),
-                    o.getDouble("longitude"),
-                    type,
-                    if (o.has("groupId")) o.optString("groupId", null) else null,
-                    if (o.has("address")) o.optString("address", null) else null,
-                    o.optBoolean("isGPSOrigin", false),
-                    o.optBoolean("isVisible", true),
-                    o.optLong("createTime")
+                    id = o.getString("id"),
+                    name = o.getString("name"),
+                    latitude = o.getDouble("latitude"),
+                    longitude = o.getDouble("longitude"),
+                    type = type,
+                    groupId = if (o.has("groupId")) o.optString("groupId", null) else null,
+                    groupName = if (o.has("groupName")) o.optString("groupName", null) else null,
+                    address = if (o.has("address")) o.optString("address", null) else null,
+                    isActive = o.optBoolean("isActive", false),
+                    isGPSOrigin = o.optBoolean("isGPSOrigin", false),
+                    isVisible = o.optBoolean("isVisible", true),
+                    createTime = o.optLong("createTime")
                 )
             )
         }
@@ -90,6 +95,15 @@ class PointRepository(private val context: Context) {
     }
 
     fun createProject(name: String, description: String? = null): Project {
+        if (!com.fengshui.app.TrialManager.isRegistered(context)) {
+            val existing = loadProjects()
+            if (existing.size >= com.fengshui.app.TrialManager.TRIAL_MAX_GROUPS) {
+                throw com.fengshui.app.TrialLimitException(
+                    "试用版最多创建 ${com.fengshui.app.TrialManager.TRIAL_MAX_GROUPS} 个项目。",
+                    com.fengshui.app.TrialLimitException.LimitType.GROUP
+                )
+            }
+        }
         val p = Project(UUID.randomUUID().toString(), name, description)
         val list = loadProjects().toMutableList()
         list.add(p)
@@ -104,7 +118,10 @@ class PointRepository(private val context: Context) {
         type: PointType,
         groupId: String? = null,
         address: String? = null,
-        isGPSOrigin: Boolean = false
+        groupName: String? = null,
+        isActive: Boolean = false,
+        isGPSOrigin: Boolean = false,
+        isVisible: Boolean = true
     ): FengShuiPoint {
         // Trial limit checks
         if (!com.fengshui.app.TrialManager.isRegistered(context)) {
@@ -125,18 +142,36 @@ class PointRepository(private val context: Context) {
             }
         }
 
+        val resolvedGroupName = groupName ?: groupId?.let { id ->
+            loadProjects().find { it.id == id }?.name
+        }
+
+        val pointId = if (isGPSOrigin) GPS_ORIGIN_ID else UUID.randomUUID().toString()
         val p = FengShuiPoint(
-            UUID.randomUUID().toString(),
-            name,
-            lat,
-            lon,
-            type,
-            groupId,
-            address,
-            isGPSOrigin
+            id = pointId,
+            name = name,
+            latitude = lat,
+            longitude = lon,
+            type = type,
+            groupId = groupId,
+            groupName = resolvedGroupName,
+            address = address,
+            isActive = isActive,
+            isGPSOrigin = isGPSOrigin,
+            isVisible = isVisible
         )
+
         val list = loadPoints().toMutableList()
-        list.add(p)
+        if (isGPSOrigin) {
+            val index = list.indexOfFirst { it.id == GPS_ORIGIN_ID }
+            if (index >= 0) {
+                list[index] = p
+            } else {
+                list.add(p)
+            }
+        } else {
+            list.add(p)
+        }
         savePoints(list)
         return p
     }

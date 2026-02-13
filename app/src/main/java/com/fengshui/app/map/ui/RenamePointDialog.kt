@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * RenamePointDialog - 点位重命名对话框
@@ -36,14 +38,14 @@ fun RenamePointDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("重命名点位")
+            Text(stringResource(id = R.string.rename_point_title))
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 TextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("新名称") },
+                    label = { Text(stringResource(id = R.string.rename_point_label)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
@@ -61,12 +63,12 @@ fun RenamePointDialog(
                     }
                 }
             ) {
-                Text("确认")
+                Text(stringResource(id = R.string.action_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(stringResource(id = R.string.action_cancel))
             }
         }
     )

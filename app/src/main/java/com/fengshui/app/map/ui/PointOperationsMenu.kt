@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fengshui.app.data.FengShuiPoint
 import com.fengshui.app.data.PointType
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * PointOperationsMenu - 点位操作菜单
@@ -78,13 +80,16 @@ fun PointOperationsMenu(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "点位列表 (${(if (originPoint != null) 1 else 0) + destPoints.size})",
+                    stringResource(
+                        id = R.string.point_list_title,
+                        (if (originPoint != null) 1 else 0) + destPoints.size
+                    ),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = "展开/收起"
+                    contentDescription = stringResource(id = R.string.action_expand_collapse)
                 )
             }
 
@@ -163,7 +168,11 @@ private fun PointItem(
                             .padding(4.dp)
                     ) {
                         Text(
-                            text = if (point.type == PointType.ORIGIN) "原" else "终",
+                            text = if (point.type == PointType.ORIGIN) {
+                                stringResource(id = R.string.point_type_origin_short)
+                            } else {
+                                stringResource(id = R.string.point_type_destination_short)
+                            },
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
@@ -177,7 +186,11 @@ private fun PointItem(
                     )
                 }
                 Text(
-                    text = "纬: %.4f, 经: %.4f".format(point.latitude, point.longitude),
+                    text = stringResource(
+                        id = R.string.label_coordinates,
+                        point.latitude,
+                        point.longitude
+                    ),
                     fontSize = 10.sp,
                     color = Color.Gray,
                     modifier = Modifier.padding(top = 4.dp)
@@ -194,12 +207,12 @@ private fun PointItem(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 PointActionButton(
-                    text = "重命名",
+                    text = stringResource(id = R.string.action_rename),
                     backgroundColor = Color(0xFFFFC107),
                     onClick = onRename
                 )
                 PointActionButton(
-                    text = "删除",
+                    text = stringResource(id = R.string.action_delete),
                     backgroundColor = Color(0xFFFF5252),
                     onClick = onDelete
                 )

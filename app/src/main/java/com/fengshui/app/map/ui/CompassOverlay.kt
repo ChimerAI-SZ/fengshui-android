@@ -17,7 +17,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.PI
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 /**
  * CompassOverlay - 风水罗盘视图，带有24山和8卦标注
@@ -45,7 +50,8 @@ fun CompassOverlay(
     longitude: Double?,
     modifier: Modifier = Modifier,
     sizeDp: androidx.compose.ui.unit.Dp = 200.dp,
-    centerHoleRadiusDp: androidx.compose.ui.unit.Dp = 20.dp
+    centerHoleRadiusDp: androidx.compose.ui.unit.Dp = 20.dp,
+    showInfo: Boolean = true
 ) {
     val compassSize = sizeDp
     val density = LocalDensity.current
@@ -66,8 +72,7 @@ fun CompassOverlay(
             modifier = Modifier
                 .size(compassSize)
                 .shadow(elevation = 8.dp, shape = CircleShape)
-                .background(Color(0xFFFBF7F0).copy(alpha = 0.5f), shape = CircleShape)
-                .rotate(-azimuthDegrees),  // 旋转罗盘以适应设备方向
+                .background(Color(0xFFFBF7F0).copy(alpha = 0.15f), shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
             // 罗盘主体 Canvas
@@ -80,7 +85,7 @@ fun CompassOverlay(
                 // ========== 外圈：360度标注 ==========
                 // 外圆边框
                 drawCircle(
-                    color = Color(0xFF999999),
+                    color = Color(0xFF999999).copy(alpha = 0.2f),
                     radius = radius,
                     style = Stroke(width = 2f)
                 )
@@ -97,17 +102,36 @@ fun CompassOverlay(
                     val y2 = centerY + (innerRadius * sin(angle)).toFloat()
                     
                     drawLine(
-                        color = Color(0xFF666666),
+                        color = Color(0xFF666666).copy(alpha = 0.25f),
                         start = Offset(x1, y1),
                         end = Offset(x2, y2),
                         strokeWidth = 1.5f
                     )
                 }
 
+                // 外圈角度数字（每30度一个）
+                val textPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.BLACK
+                    textSize = with(density) { 10.sp.toPx() }
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                val labelRadius = radius * 0.86f
+                for (deg in 0 until 360 step 30) {
+                    if (deg == 0 || deg == 90 || deg == 180 || deg == 270) {
+                        continue
+                    }
+                    val angle = Math.toRadians((deg - 90).toDouble())
+                    val tx = centerX + (labelRadius * cos(angle)).toFloat()
+                    val ty = centerY + (labelRadius * sin(angle)).toFloat()
+                    val label = deg.toString()
+                    drawContext.canvas.nativeCanvas.drawText(label, tx, ty + textPaint.textSize / 3f, textPaint)
+                }
+
                 // ========== 24山圈 ==========
                 val shanRadius = radius * 0.70f
                 drawCircle(
-                    color = Color(0xFFE8E8E8),
+                    color = Color(0xFFE8E8E8).copy(alpha = 0.15f),
                     radius = shanRadius,
                     style = Stroke(width = 1f)
                 )
@@ -123,7 +147,7 @@ fun CompassOverlay(
                     val y2 = centerY + (radius * 0.75f * sin(angle1)).toFloat()
                     
                     drawLine(
-                        color = Color(0xFFCCCCCC),
+                        color = Color(0xFFCCCCCC).copy(alpha = 0.2f),
                         start = Offset(x1, y1),
                         end = Offset(x2, y2),
                         strokeWidth = 1f
@@ -133,7 +157,7 @@ fun CompassOverlay(
                 // ========== 8卦圈 ==========
                 val baguaRadius = radius * 0.52f
                 drawCircle(
-                    color = Color(0xFFD0D0D0),
+                    color = Color(0xFFD0D0D0).copy(alpha = 0.2f),
                     radius = baguaRadius,
                     style = Stroke(width = 1f)
                 )
@@ -141,15 +165,15 @@ fun CompassOverlay(
                 // ========== 方向圈 ==========
                 val dirRadius = radius * 0.40f
                 drawCircle(
-                    color = Color(0xFFDCDCDC),
+                    color = Color(0xFFDCDCDC).copy(alpha = 0.2f),
                     radius = dirRadius,
                     style = Stroke(width = 1f)
                 )
 
                 // ========== 中心部分 ==========
-                // 中心圆（浅黄色底子）
+                // 中心圆：保持全透明，仅保留红色十字
                 drawCircle(
-                    color = Color(0xFFFFFACD),
+                    color = Color.Transparent,
                     radius = dirRadius * 0.75f
                 )
 
@@ -170,12 +194,12 @@ fun CompassOverlay(
 
                 // 蓝色圆圈（当前位置指示）
                 drawCircle(
-                    color = Color.White,
+                    color = Color.White.copy(alpha = 0.2f),
                     radius = dirRadius * 0.6f,
                     style = Stroke(width = 2f)
                 )
                 drawCircle(
-                    color = Color.Blue,
+                    color = Color.Blue.copy(alpha = 0.35f),
                     radius = dirRadius * 0.55f,
                     style = Stroke(width = 2f)
                 )
@@ -226,7 +250,7 @@ fun CompassOverlay(
                         .align(Alignment.Center)
                         .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp)
                         .background(
-                            color = getBaGuaColor(i),
+                            color = getBaGuaColor(i).copy(alpha = 0.45f),
                             shape = CircleShape
                         ),
                     contentAlignment = Alignment.Center
@@ -260,55 +284,71 @@ fun CompassOverlay(
                 modifier = Modifier
                     .size(compassSize * 0.55f)
                     .align(Alignment.Center)
+                    .rotate(azimuthDegrees)
             ) {
                 val cx = size.width / 2f
                 val cy = size.height / 2f
                 val needleLength = size.height / 2.8f
+                val arrowSize = needleLength * 0.18f
                 
                 // 上指针（红色）
                 drawLine(
                     color = Color.Red,
                     start = Offset(cx, cy),
                     end = Offset(cx, cy - needleLength),
-                    strokeWidth = 3.5f
+                    strokeWidth = 5.5f,
+                    cap = StrokeCap.Round
                 )
+
+                val arrowPath = Path().apply {
+                    moveTo(cx, cy - needleLength)
+                    lineTo(cx - arrowSize, cy - needleLength + arrowSize * 1.4f)
+                    lineTo(cx + arrowSize, cy - needleLength + arrowSize * 1.4f)
+                    close()
+                }
+                drawPath(color = Color(0xFF8E1B1B), path = arrowPath, style = Stroke(width = 2f))
+                drawPath(color = Color.Red, path = arrowPath)
                 
                 // 下指针（黑色）
                 drawLine(
                     color = Color.Black,
                     start = Offset(cx, cy),
                     end = Offset(cx, cy + needleLength * 0.25f),
-                    strokeWidth = 2f
+                    strokeWidth = 3f,
+                    cap = StrokeCap.Round
                 )
                 
                 // 中心点
-                drawCircle(color = Color.Black, radius = 4f, center = Offset(cx, cy))
+                drawCircle(color = Color.White, radius = 5.5f, center = Offset(cx, cy))
+                drawCircle(color = Color.Black, radius = 3.5f, center = Offset(cx, cy))
             }
         }
 
-        // 信息显示区（方位角和坐标）
-        Box(
-            modifier = Modifier
-                .background(Color(0xFFFFF9C4), shape = CircleShape)
-                .padding(8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        if (showInfo) {
+            // 信息显示区（方位角和坐标）
+            Box(
+                modifier = Modifier
+                    .background(Color(0xFFFFF9C4), shape = CircleShape)
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "方位: ${"%.1f".format(azimuthDegrees)}°",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    style = TextStyle(color = Color(0xFF333333))
-                )
-                if (latitude != null && longitude != null) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
                     Text(
-                        text = "${"%.4f".format(latitude)}, ${"%.4f".format(longitude)}",
-                        fontSize = 9.sp,
-                        style = TextStyle(color = Color(0xFF666666))
+                        text = stringResource(id = R.string.compass_bearing_label, azimuthDegrees),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(color = Color(0xFF333333))
                     )
+                    if (latitude != null && longitude != null) {
+                        Text(
+                            text = "${"%.4f".format(latitude)}, ${"%.4f".format(longitude)}",
+                            fontSize = 9.sp,
+                            style = TextStyle(color = Color(0xFF666666))
+                        )
+                    }
                 }
             }
         }

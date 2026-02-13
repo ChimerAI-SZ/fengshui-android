@@ -17,23 +17,23 @@
         android:allowBackup="true"
         android:label="@string/app_name"
         android:icon="@android:drawable/sym_def_app_icon"
-        android:theme="@style/Theme.Material3.Light"
+        android:theme="@style/Theme.FengShuiTool"
         tools:targetApi="31">
         
         <!-- Google Maps API Key (Phase 4) -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyCd5OjQFGaI_BfnInLvTEs9za0UgmIagug" />
+            android:value="${GOOGLE_MAPS_API_KEY}" />
         
         <!-- Amap API Key (Phase 4) -->
         <meta-data
             android:name="com.amap.api.v2.apikey"
-            android:value="e1aa52402199b450a115a7ea7057ebd1" />
+            android:value="${AMAP_API_KEY}" />
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Material3.Light">
+            android:theme="@style/Theme.FengShuiTool">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

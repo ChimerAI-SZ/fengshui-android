@@ -13,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.fengshui.app.R
 
 @Composable
 fun RegistrationDialog(
@@ -23,22 +25,22 @@ fun RegistrationDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text("输入注册码以解锁完整功能") },
+        title = { Text(stringResource(id = R.string.registration_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = codeState.value,
                     onValueChange = { codeState.value = it },
-                    label = { Text("注册码") },
+                    label = { Text(stringResource(id = R.string.registration_code_label)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
             }
         },
         confirmButton = {
-            Button(onClick = { onRegister(codeState.value) }) { Text("注册") }
+            Button(onClick = { onRegister(codeState.value) }) { Text(stringResource(id = R.string.action_register)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) { Text("取消") }
+            TextButton(onClick = onDismissRequest) { Text(stringResource(id = R.string.action_cancel)) }
         }
     )
 }

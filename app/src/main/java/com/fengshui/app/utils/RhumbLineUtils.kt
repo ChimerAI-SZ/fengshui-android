@@ -1,14 +1,10 @@
 package com.fengshui.app.utils
 
+import com.fengshui.app.data.ShanUtils
+import com.fengshui.app.map.abstraction.UniversalLatLng
 import kotlin.math.*
 
 object RhumbLineUtils {
-    private val SHAN_NAMES = arrayOf(
-        "子", "癸", "丑", "艮", "寅", "甲",
-        "卯", "乙", "辰", "巽", "巳", "丙",
-        "午", "丁", "未", "坤", "申", "庚",
-        "酉", "辛", "戌", "乾", "亥", "壬"
-    )
 
     // 计算恒向线方位角（Rhumb bearing）
     // 输入纬度经度为十进制度
@@ -26,6 +22,10 @@ object RhumbLineUtils {
         return ((Math.toDegrees(bearing) + 360.0) % 360.0).toFloat()
     }
 
+    fun calculateRhumbBearing(origin: UniversalLatLng, destination: UniversalLatLng): Float {
+        return calculateRhumbBearing(origin.latitude, origin.longitude, destination.latitude, destination.longitude)
+    }
+
     // 近似直线距离（使用球面大圆近似；Rhumb 距离略有不同，但对于短距离可用 Haversine）
     fun haversineDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
         val R = 6371000.0 // m
@@ -36,39 +36,76 @@ object RhumbLineUtils {
         return (R * c).toFloat()
     }
 
-    fun getShanIndex(angle: Float): Int {
-        val normalizedAngle = ((angle % 360) + 360) % 360
-        return (((normalizedAngle + 7.5f) / 15f).toInt() % 24)
+    fun calculateRhumbDistance(origin: UniversalLatLng, destination: UniversalLatLng): Float {
+        val R = 6371000.0
+        val phi1 = Math.toRadians(origin.latitude)
+        val phi2 = Math.toRadians(destination.latitude)
+        var dLon = Math.toRadians(destination.longitude - origin.longitude)
+
+        if (dLon > Math.PI) dLon -= 2 * Math.PI
+        if (dLon < -Math.PI) dLon += 2 * Math.PI
+
+        val dPhi = phi2 - phi1
+        val dPsi = ln(tan(phi2 / 2.0 + Math.PI / 4.0) / tan(phi1 / 2.0 + Math.PI / 4.0))
+        val q = if (abs(dPsi) > 1e-12) dPhi / dPsi else cos(phi1)
+
+        val distance = sqrt(dPhi * dPhi + q * q * dLon * dLon) * R
+        return distance.toFloat()
     }
 
-    fun getShanName(angle: Float): String = SHAN_NAMES[getShanIndex(angle)]
+    fun calculateRhumbDestination(
+        start: UniversalLatLng,
+        bearing: Float,
+        distanceMeters: Float
+    ): UniversalLatLng {
+        val R = 6371000.0
+        val phi1 = Math.toRadians(start.latitude)
+        val lambda1 = Math.toRadians(start.longitude)
+        val theta = Math.toRadians(bearing.toDouble())
+        val d = distanceMeters.toDouble() / R
+
+        val dPhi = d * cos(theta)
+        var phi2 = phi1 + dPhi
+
+        if (phi2 > Math.PI / 2) phi2 = Math.PI / 2
+        if (phi2 < -Math.PI / 2) phi2 = -Math.PI / 2
+
+        val dPsi = ln(tan(phi2 / 2.0 + Math.PI / 4.0) / tan(phi1 / 2.0 + Math.PI / 4.0))
+        val q = if (abs(dPsi) > 1e-12) dPhi / dPsi else cos(phi1)
+        val dLambda = d * sin(theta) / q
+
+        var lambda2 = lambda1 + dLambda
+        if (lambda2 > Math.PI) lambda2 -= 2 * Math.PI
+        if (lambda2 < -Math.PI) lambda2 += 2 * Math.PI
+
+        return UniversalLatLng(Math.toDegrees(phi2), Math.toDegrees(lambda2))
+    }
+
+    fun getShanIndex(angle: Float): Int {
+        return ShanUtils.getShanIndex(angle)
+    }
+
+    fun getShanName(angle: Float): String = ShanUtils.SHAN_NAMES[getShanIndex(angle)]
 
     // 简单八卦映射（基于中心角）
     fun getBaGua(angle: Float): String {
-        val index = getShanIndex(angle)
-        val ba = when (index / 3) {
-            0 -> "坎"
-            1 -> "艮"
-            2 -> "震"
-            3 -> "巽"
-            4 -> "离"
-            5 -> "坤"
-            6 -> "兑"
-            else -> "乾"
-        }
-        return ba
+        return ShanUtils.getBaGuaByIndex(getShanIndex(angle)).label
     }
 
     // 五行简单映射（示意）
     fun getWuXing(angle: Float): String {
-        val shan = getShanIndex(angle)
-        return when (shan) {
-            in 0..2, in 18..20 -> "水"
-            in 3..5, in 15..17 -> "木"
-            in 6..8, in 12..14 -> "火"
-            in 9..11 -> "土"
-            in 21..23 -> "金"
-            else -> "土"
-        }
+        return ShanUtils.getWuXingByIndex(getShanIndex(angle)).label
+    }
+
+    fun getReverseBearing(bearing: Float): Float = ((bearing + 180f) % 360f)
+
+    fun getOppositeShanIndex(shanIndex: Int): Int = ShanUtils.getOppositeShanIndex(shanIndex)
+
+    fun verifySymmetry(pointA: UniversalLatLng, pointB: UniversalLatLng, epsilonDegrees: Float = 0.5f): Boolean {
+        val ab = calculateRhumbBearing(pointA, pointB)
+        val ba = calculateRhumbBearing(pointB, pointA)
+        val sum = (ab + ba) % 360f
+        val diff = abs(360f - if (sum == 0f) 360f else sum)
+        return diff <= epsilonDegrees
     }
 }

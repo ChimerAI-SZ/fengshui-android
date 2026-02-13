@@ -6,6 +6,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.annotation.StringRes
+import com.fengshui.app.R
 
 /**
  * 底部导航栏的Tab定义
@@ -13,11 +15,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
  */
 enum class NavigationItem(
     val route: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector
 ) {
-    MAP("map", "地图", Icons.Default.Home),
-    CASE_MANAGEMENT("cases", "堪舆管理", Icons.Default.Settings),
-    SEARCH("search", "搜索", Icons.Default.Search),
-    INFO("info", "说明", Icons.Default.Info)
+    MAP("map", R.string.nav_map, Icons.Default.Home),
+    CASE_MANAGEMENT("cases", R.string.nav_case_management, Icons.Default.Settings),
+    SEARCH("search", R.string.nav_search, Icons.Default.Search),
+    INFO("info", R.string.nav_info, Icons.Default.Info)
 }

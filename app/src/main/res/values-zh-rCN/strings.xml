@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">风水工具</string>
+    <string name="compass_label">罗盘</string>
+    <string name="map_label">地图</string>
+    <string name="nav_map">地图</string>
+    <string name="nav_case_management">堪舆管理</string>
+    <string name="nav_search">搜索</string>
+    <string name="nav_info">说明</string>
+    <string name="lang_toggle_zh">中文</string>
+    <string name="lang_toggle_en">En</string>
+    <string name="menu_open">菜单</string>
+    <string name="menu_collapse">收起</string>
+    <string name="action_confirm">确定</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_close">关闭</string>
+    <string name="action_save">保存</string>
+    <string name="action_create">创建</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_delete">删除</string>
+    <string name="action_delete_point">删除点位</string>
+    <string name="action_rename">重命名</string>
+    <string name="action_register">注册</string>
+    <string name="action_search">搜索</string>
+    <string name="action_locate_here">定位到此处</string>
+    <string name="action_locate_to_map">定位到地图</string>
+    <string name="action_locate_short">定位</string>
+    <string name="action_select_location">选择此位置</string>
+    <string name="action_save_origin">保存为原点</string>
+    <string name="action_save_destination">保存为终点</string>
+    <string name="action_create_case">创建案例</string>
+    <string name="action_quick_add_point">快速加点</string>
+    <string name="action_add_to_case">添加到案例</string>
+    <string name="action_select_origin">原点</string>
+    <string name="action_add_point">加点</string>
+    <string name="action_show_line_info">显示连线信息</string>
+    <string name="action_life_circle_mode">生活圈</string>
+    <string name="action_sector_search">扇形搜索</string>
+    <string name="action_lock">🔒 锁定罗盘</string>
+    <string name="action_unlock">🔓 解锁罗盘</string>
+    <string name="action_locate">📍 定位</string>
+    <string name="action_exit">退出</string>
+    <string name="action_expand_collapse">展开/收起</string>
+    <string name="action_start_search">开始搜索</string>
+    <string name="action_cancel_new_case">取消新建案例</string>
+    <string name="action_create_new_case">新建案例</string>
+
+    <string name="crosshair_current_case">当前案例: %1$s</string>
+    <string name="crosshair_search_title">搜索位置</string>
+    <string name="crosshair_search_subtitle">拖动地图微调后保存</string>
+    <string name="crosshair_manual_title">手动选点</string>
+    <string name="crosshair_manual_subtitle">拖动地图对准位置后保存</string>
+    <string name="crosshair_not_located">未定位</string>
+
+    <string name="case_empty_title">暂无案例</string>
+    <string name="case_empty_subtitle">点击右下角按钮创建新案例</string>
+    <string name="case_summary">原点: %1$d | 终点: %2$d | 创建: %3$s</string>
+    <string name="case_description">描述: %1$s</string>
+    <string name="case_no_points">该案例中暂无点位</string>
+    <string name="case_not_selected">未选择案例</string>
+    <string name="case_none">无</string>
+    <string name="label_case_with_name">📋 案例: %1$s</string>
+    <string name="select_case_title">选择案例</string>
+    <string name="select_case_title_short">选择案例</string>
+    <string name="case_select_empty">暂无案例，请先创建案例</string>
+    <string name="dialog_create_case_title">创建新案例</string>
+    <string name="dialog_edit_case_title">编辑案例</string>
+    <string name="label_case_name">案例名称</string>
+    <string name="label_case_description_optional">案例描述（可选）</string>
+    <string name="label_case_description">案例描述</string>
+    <string name="label_new_case_name">新案例名称</string>
+    <string name="err_enter_new_case_name">请输入新案例名称</string>
+
+    <string name="trial_limit_reached">达到试用限制</string>
+    <string name="register_success">注册成功，已解锁完整功能</string>
+    <string name="register_invalid">注册码无效</string>
+    <string name="registration_title">输入注册码以解锁完整功能</string>
+    <string name="registration_code_label">注册码</string>
+
+    <string name="map_type_satellite">卫星</string>
+    <string name="map_type_vector">矢量</string>
+
+    <string name="label_origin">原点</string>
+    <string name="label_destination">终点</string>
+    <string name="label_origin_coordinates">原点坐标</string>
+    <string name="label_destination_coordinates">终点坐标</string>
+    <string name="label_bearing">方位角</string>
+    <string name="label_shan_24">24山</string>
+    <string name="label_bagua">八卦</string>
+    <string name="label_wuxing">五行</string>
+    <string name="label_distance">直线距离</string>
+    <string name="label_keyword">关键词</string>
+    <string name="label_distance_range">距离(米，100-250000)</string>
+    <string name="label_coordinates">纬: %1$.4f, 经: %2$.4f</string>
+
+    <string name="point_list_title">点位列表 (%1$d)</string>
+    <string name="point_list_item_name">[%1$s] %2$s</string>
+    <string name="point_type_origin_short">原</string>
+    <string name="point_type_destination_short">终</string>
+    <string name="point_type_origin">原点</string>
+    <string name="point_type_origin_checked">✅ 原点</string>
+    <string name="point_type_destination">终点</string>
+    <string name="point_type_destination_checked">✅ 终点</string>
+
+    <string name="line_info_title">堪舆计算结果</string>
+    <string name="line_info_section_points">点位信息</string>
+    <string name="line_info_section_direction">方位信息</string>
+    <string name="line_info_section_distance">距离</string>
+    <string name="line_info_tip">💡 点击面板可展开/收起详细信息</string>
+    <string name="line_info_text">原点: %1$s\n终点: %2$s\n经纬: %3$.6f, %4$.6f -> %5$.6f, %6$.6f\n方位角: %7$.1f°\n24山: %8$s\n八卦: %9$s\n五行: %10$s\n直线距离: %11$.1f m</string>
+
+    <string name="life_circle_select_origins_title">选择 3 个原点</string>
+    <string name="life_circle_role_assignment_title">角色分配</string>
+    <string name="life_circle_role_home">家</string>
+    <string name="life_circle_role_work">公司</string>
+    <string name="life_circle_role_entertainment">日常</string>
+    <string name="life_circle_role_entertainment_places">日常场所</string>
+    <string name="life_circle_no_connections">暂无指入</string>
+    <string name="life_circle_mode_label">生活圈模式</string>
+    <string name="life_circle_show_info">指入</string>
+    <string name="life_circle_no_data">暂无生活圈数据</string>
+    <string name="err_select_three_origins">请为三个角色分别选择原点</string>
+    <string name="err_need_three_origins">生活圈模式需要至少 3 个原点</string>
+    <string name="err_select_origin_first">请先选择原点</string>
+    <string name="err_no_origin_points">暂无原点，请先添加</string>
+
+    <string name="sector_search_title">扇形区域搜索</string>
+    <string name="sector_mode_shan">24山</string>
+    <string name="sector_mode_bagua">八方位</string>
+    <string name="sector_prev_shan">上一山</string>
+    <string name="sector_next_shan">下一山</string>
+    <string name="sector_prev_bagua">上一卦</string>
+    <string name="sector_next_bagua">下一卦</string>
+    <string name="sector_current_label">当前: %1$s</string>
+    <string name="sector_result_title">扇形搜索结果: %1$s</string>
+    <string name="sector_search_loading">搜索中...</string>
+    <string name="sector_no_results">没有符合条件的结果</string>
+    <string name="sector_notice">已显示前 %1$d 个结果</string>
+
+    <string name="select_origin_title">选择原点</string>
+    <string name="select_destination_title">选择终点</string>
+    <string name="no_destination_tip">暂无终点，请先在地图上添加终点</string>
+
+    <string name="search_title">地址搜索</string>
+    <string name="search_input_label">输入地址、地点或坐标</string>
+    <string name="search_tips_title">搜索提示：</string>
+    <string name="search_tip_provider">• 当前使用：%1$s</string>
+    <string name="search_tip_auto">• 输入文字会自动搜索，可点击结果定位到地图</string>
+    <string name="search_loading">搜索中...</string>
+    <string name="search_empty">搜索结果将在此显示</string>
+    <string name="search_provider_label">当前提供方：%1$s</string>
+    <string name="search_result_coordinates">%1$.4f, %2$.4f</string>
+    <string name="save_to_case">保存到 "%1$s"</string>
+
+    <string name="provider_google_places">Google Places</string>
+    <string name="provider_google_map_short">谷歌</string>
+    <string name="provider_amap">高德地图</string>
+    <string name="provider_amap_short">高德</string>
+    <string name="provider_mock">Mock</string>
+
+    <string name="info_title">应用说明</string>
+    <string name="info_section_version_title">版本信息</string>
+    <string name="info_section_version_content">应用名：24 山风水罗盘\n版本：1.0.0 (Phase 3)\n发布时间：2026-02-06</string>
+    <string name="info_section_features_title">功能说明</string>
+    <string name="info_section_features_content">✓ 风水罗盘：实时显示 24 山和八卦方位\n✓ 点位管理：标记并管理堪舆点位\n✓ 连线计算：自动计算方位角和距离\n✓ 多案例：支持创建多个案例独立管理\n✓ 数据持久化：所有数据自动保存</string>
+    <string name="info_section_tips_title">使用技巧</string>
+    <string name="info_section_tips_content">1. 地图界面添加点位后，左上角可查看点位列表\n2. 长按点位可重命名或删除\n3. 创建多个案例来隔离不同的堪舆分析\n4. 在堪舆管理中查看所有案例的详细信息</string>
+    <string name="info_section_tech_title">技术架构</string>
+    <string name="info_section_tech_content">• 框架：Jetpack Compose + Kotlin\n• 地图：Google Maps SDK (可切换高德地图)\n• 数据：SharedPreferences + JSON\n• 算法：大地测量学 (Geodesic)</string>
+    <string name="info_footer">© 2026 风水罗盘应用 | 单一事实来源 (SSOT) 文档</string>
+
+    <string name="compass_bearing_label">方位: %1$.1f°</string>
+
+    <string name="marker_origin_prefix">原点:%1$s</string>
+    <string name="marker_destination_prefix">终点:%1$s</string>
+    <string name="default_origin_name">原点%1$d</string>
+    <string name="default_destination_name">终点%1$d</string>
+    <string name="gps_locating">正在定位GPS...</string>
+    <string name="gps_getting">正在获取GPS位置...</string>
+    <string name="err_no_location">无法获取当前位置</string>
+    <string name="err_select_or_create_case">请先选择或创建案例</string>
+    <string name="err_add_origin_failed">添加原点失败</string>
+    <string name="err_add_destination_failed">添加终点失败</string>
+    <string name="err_add_point_failed">添加点位失败</string>
+    <string name="err_enter_keyword">请输入关键词</string>
+
+    <string name="add_point_title">添加点位</string>
+    <string name="add_point_name_label">点位名称</string>
+    <string name="rename_point_title">重命名点位</string>
+    <string name="rename_point_label">新名称</string>
+</resources>
