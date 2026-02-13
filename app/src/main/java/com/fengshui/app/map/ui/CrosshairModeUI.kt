@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
+import com.fengshui.app.data.PointType
 
 @Composable
 fun CrosshairModeUI(
@@ -35,6 +36,9 @@ fun CrosshairModeUI(
     projectName: String,
     isLifeCircleSelection: Boolean,
     tempViewMode: Boolean,
+    continuousAddMode: Boolean,
+    continuousAddType: PointType,
+    onSwitchContinuousAddType: () -> Unit,
     onSelectOrigin: () -> Unit,
     onSelectDestination: () -> Unit,
     onCancel: () -> Unit
@@ -109,16 +113,42 @@ fun CrosshairModeUI(
                         }
                     }
                     else -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Button(onClick = onSelectOrigin, modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.action_save_origin))
+                        if (continuousAddMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (continuousAddType == PointType.ORIGIN) onSelectOrigin() else onSelectDestination()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        if (continuousAddType == PointType.ORIGIN) {
+                                            stringResource(id = R.string.action_save_origin)
+                                        } else {
+                                            stringResource(id = R.string.action_save_destination)
+                                        }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.size(8.dp))
+                                Button(onClick = onSwitchContinuousAddType, modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(id = R.string.action_switch_point_type))
+                                }
                             }
-                            Spacer(modifier = Modifier.size(8.dp))
-                            Button(onClick = onSelectDestination, modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.action_save_destination))
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Button(onClick = onSelectOrigin, modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(id = R.string.action_save_origin))
+                                }
+                                Spacer(modifier = Modifier.size(8.dp))
+                                Button(onClick = onSelectDestination, modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(id = R.string.action_save_destination))
+                                }
                             }
                         }
                     }

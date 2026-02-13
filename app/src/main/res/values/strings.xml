@@ -34,6 +34,9 @@
     <string name="action_quick_add_point">Quick add</string>
     <string name="action_add_to_case">Add to case</string>
     <string name="action_select_origin">Origin</string>
+    <string name="action_select_destination">Destination</string>
+    <string name="action_select_all_destinations">Select all</string>
+    <string name="action_clear_all_destinations">Clear all</string>
     <string name="action_add_point">Add point</string>
     <string name="action_show_line_info">Show line info</string>
     <string name="action_life_circle_mode">Life circle</string>
@@ -52,12 +55,17 @@
     <string name="action_cancel_new_case">Cancel new case</string>
     <string name="action_create_new_case">New case</string>
     <string name="action_create_case_and_save">Create case and save</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_continue_add">Continue add</string>
+    <string name="action_switch_point_type">Switch type</string>
+    <string name="action_previous_step">Previous</string>
 
     <string name="crosshair_current_case">Current case: %1$s</string>
     <string name="crosshair_search_title">Search location</string>
     <string name="crosshair_search_subtitle">Drag map to fine-tune, then save</string>
     <string name="crosshair_manual_title">Manual pick</string>
     <string name="crosshair_manual_subtitle">Drag map to align, then save</string>
+    <string name="crosshair_continue_add_subtitle">Continue adding points at crosshair</string>
     <string name="crosshair_not_located">Not located</string>
 
     <string name="case_empty_title">No cases yet</string>
@@ -131,6 +139,10 @@
     <string name="life_circle_mode_label">Life circle mode</string>
     <string name="life_circle_show_info">Connections</string>
     <string name="life_circle_no_data">No life circle data</string>
+    <string name="life_circle_step_home">Step 1: Select Home</string>
+    <string name="life_circle_step_work">Step 2: Select Work</string>
+    <string name="life_circle_step_entertainment">Step 3: Select Daily Place</string>
+    <string name="life_circle_step_hint">Pick one origin point for this role.</string>
     <string name="err_select_three_origins">Select three origins for the three roles</string>
     <string name="err_need_three_origins">Life circle mode needs at least 3 origins</string>
     <string name="err_select_origin_first">Select an origin first</string>
@@ -148,6 +160,17 @@
     <string name="sector_search_loading">Searching...</string>
     <string name="sector_no_results">No matching results</string>
     <string name="sector_notice">Showing first %1$d results</string>
+    <string name="sector_effective_radius">Effective search radius: %1$.1f km</string>
+    <string name="sector_sort_distance">Sort: Distance</string>
+    <string name="sector_sort_name">Sort: Name</string>
+    <string name="sector_item_distance_km">Distance: %1$.2f km</string>
+    <string name="post_save_point_saved">Saved point</string>
+    <string name="section_map_tools">Map tools</string>
+    <string name="section_case_ops">Case ops</string>
+    <string name="section_analysis">Analysis</string>
+    <string name="action_continuous_add_on">Continuous add: On</string>
+    <string name="action_continuous_add_off">Continuous add: Off</string>
+    <string name="action_continuous_current_type">Current type: %1$s</string>
     <string name="sector_keyword_hint">Leave blank to draw region only</string>
     <string name="sector_distance_hint">Distance range: 100m to 5000km</string>
     <string name="sector_invalid_distance">Enter a valid number</string>
@@ -173,6 +196,9 @@
     <string name="search_loading">Searching...</string>
     <string name="search_empty">Results will appear here</string>
     <string name="search_provider_label">Current provider: %1$s</string>
+    <string name="search_provider_trace">Tried providers: %1$s</string>
+    <string name="search_hint_no_network">No network connection detected. Please check emulator/phone network.</string>
+    <string name="search_hint_no_result_provider">No results from current providers. Try a full place name or switch map provider.</string>
     <string name="search_result_coordinates">%1$.4f, %2$.4f</string>
     <string name="save_to_case">Save to "%1$s"</string>
 

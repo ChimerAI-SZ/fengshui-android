@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -58,8 +59,10 @@ import com.fengshui.app.data.LifeCirclePointType
 import com.fengshui.app.data.LifeCircleConnection
 import com.fengshui.app.utils.RhumbLineUtils
 import com.fengshui.app.utils.ApiKeyConfig
+import com.fengshui.app.utils.Prefs
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -82,6 +85,7 @@ import com.fengshui.app.map.ui.LifeCircleLabelPanel
 import com.fengshui.app.map.ui.SectorConfigDialog
 import com.fengshui.app.map.ui.SectorConfig
 import com.fengshui.app.map.ui.RegistrationDialog
+import com.fengshui.app.map.ui.MultiSelectDestinationDialog
 import com.fengshui.app.map.ui.AmapMapViewWrapper
 import com.fengshui.app.map.GoogleMapView
 import com.fengshui.app.map.LifeCircleUtils
@@ -189,7 +193,11 @@ fun MapScreen(
     var trialMessage by remember { mutableStateOf("") }
     var showRegistrationDialog by remember { mutableStateOf(false) }
     var showOriginSelectDialog by remember { mutableStateOf(false) }  // 原点选择对话框
+    var showDestinationSelectDialog by remember { mutableStateOf(false) }
+    var showOriginAfterDestinationDialog by remember { mutableStateOf(false) }
     var showProjectSelectDialog by remember { mutableStateOf(false) }  // 案例选择对话框
+    val selectedDestinationIds = remember { mutableStateListOf<String>() }
+    val pendingDestinationIds = remember { mutableStateListOf<String>() }
     val scope = rememberCoroutineScope()
     var sideBarExpanded by remember { mutableStateOf(false) }
     val sidebarScrollState = rememberScrollState()
@@ -200,6 +208,18 @@ fun MapScreen(
     var addPointProjectId by remember { mutableStateOf<String?>(null) }
     var addPointUseNewProject by remember { mutableStateOf(false) }
     var addPointNewProjectName by remember { mutableStateOf("") }
+    var continuousAddMode by remember { mutableStateOf(false) }
+    var continuousAddType by remember { mutableStateOf(PointType.ORIGIN) }
+    var showPostSaveQuickActions by remember { mutableStateOf(false) }
+    var lastAddedPoint by remember { mutableStateOf<FengShuiPoint?>(null) }
+    var lastAddedPointType by remember { mutableStateOf(PointType.ORIGIN) }
+    var sectionMapToolsExpanded by remember { mutableStateOf(false) }
+    var sectionCaseExpanded by remember { mutableStateOf(false) }
+    var sectionAnalysisExpanded by remember { mutableStateOf(false) }
+    var lifeCircleWizardStep by remember { mutableStateOf(0) } // 0 none, 1 home, 2 work, 3 entertainment
+    var lifeCircleHomeId by remember { mutableStateOf<String?>(null) }
+    var lifeCircleWorkId by remember { mutableStateOf<String?>(null) }
+    var sectorSortByDistance by remember { mutableStateOf(true) }
     val viewModel: MapUiStateViewModel = viewModel()
     val ui = viewModel.ui
     val crosshairSearchTitle = stringResource(id = R.string.crosshair_search_title)
@@ -215,6 +235,7 @@ fun MapScreen(
     val msgAddDestinationFailed = stringResource(id = R.string.err_add_destination_failed)
     val msgGpsGetting = stringResource(id = R.string.gps_getting)
     val msgNoOrigins = stringResource(id = R.string.err_no_origin_points)
+    val msgNoDestinations = stringResource(id = R.string.no_destination_tip)
     val msgNeedThreeOrigins = stringResource(id = R.string.err_need_three_origins)
     val msgAddPointFailed = stringResource(id = R.string.err_add_point_failed)
     val msgRegisterSuccess = stringResource(id = R.string.register_success)
@@ -226,9 +247,38 @@ fun MapScreen(
     val msgSectorRadiusLimited = stringResource(id = R.string.sector_poi_radius_limited_notice)
     val msgSectorSearchFailed = stringResource(id = R.string.sector_search_failed)
     val msgSectorFromMapCenter = stringResource(id = R.string.sector_origin_map_center_notice)
+    val msgSectorSortByDistance = stringResource(id = R.string.sector_sort_distance)
+    val msgSectorSortByName = stringResource(id = R.string.sector_sort_name)
+    val msgPostSavedPoint = stringResource(id = R.string.post_save_point_saved)
+    val msgPostSavedOrigin = stringResource(id = R.string.point_type_origin)
+    val msgPostSavedDestination = stringResource(id = R.string.point_type_destination)
+    val msgUndo = stringResource(id = R.string.action_undo)
+    val msgContinueAdd = stringResource(id = R.string.action_continue_add)
+    val msgContinueAddHint = stringResource(id = R.string.crosshair_continue_add_subtitle)
+    val sectionMapTools = stringResource(id = R.string.section_map_tools)
+    val sectionCaseOps = stringResource(id = R.string.section_case_ops)
+    val sectionAnalysis = stringResource(id = R.string.section_analysis)
+    val actionContinuousAddModeOn = stringResource(id = R.string.action_continuous_add_on)
+    val actionContinuousAddModeOff = stringResource(id = R.string.action_continuous_add_off)
+    val actionContinuousCurrentType = stringResource(
+        id = R.string.action_continuous_current_type,
+        if (continuousAddType == PointType.ORIGIN) msgPostSavedOrigin else msgPostSavedDestination
+    )
+    val lifeCircleStepHome = stringResource(id = R.string.life_circle_step_home)
+    val lifeCircleStepWork = stringResource(id = R.string.life_circle_step_work)
+    val lifeCircleStepEntertainment = stringResource(id = R.string.life_circle_step_entertainment)
+    val lifeCircleStepHint = stringResource(id = R.string.life_circle_step_hint)
+    val actionSelectDestination = stringResource(id = R.string.action_select_destination)
     
     // 地图是否已初始化
     val mapReady = remember { mutableStateOf(false) }
+
+    fun openSidebarCollapsed() {
+        sectionMapToolsExpanded = false
+        sectionCaseExpanded = false
+        sectionAnalysisExpanded = false
+        sideBarExpanded = true
+    }
 
     LaunchedEffect(mapProviderType) {
         mapReady.value = false
@@ -251,19 +301,17 @@ fun MapScreen(
                 
                 android.util.Log.d("MapScreen", "Origins: ${originPoints.size}, Destinations: ${destPoints.size}")
                 
-                // 自动生成连线：每个原点与每个终点
-                for (origin in originPoints) {
-                    for (dest in destPoints) {
-                        linesList.add(LineData(origin, dest))
-                        android.util.Log.d("MapScreen", "Generated line from ${origin.name} to ${dest.name}")
-                    }
-                }
-                
-                android.util.Log.d("MapScreen", "Total lines: ${linesList.size}")
-                
-                // 如果有原点，选中第一个
+                selectedDestinationIds.clear()
                 if (originPoints.isNotEmpty()) {
                     selectedOriginPoint = originPoints[0]
+                } else {
+                    selectedOriginPoint = null
+                }
+                linesList.clear()
+                selectedOriginPoint?.let { origin ->
+                    destPoints.forEach { dest ->
+                        linesList.add(LineData(origin, dest))
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("MapScreen", "Error loading project data: ${e.message}", e)
@@ -383,6 +431,64 @@ fun MapScreen(
     fun buildLifeCircleLabels(targetId: String): List<String> {
         return viewModel.buildLifeCircleLabels(targetId)
     }
+
+    fun refreshLinesForDisplay() {
+        linesList.clear()
+        val origin = selectedOriginPoint ?: originPoints.firstOrNull()
+        if (origin == null) {
+            renderPointMarkers(clearExisting = true)
+            return
+        }
+        val activeDestinations = if (selectedDestinationIds.isEmpty()) {
+            destPoints
+        } else {
+            destPoints.filter { selectedDestinationIds.contains(it.id) }
+        }
+        activeDestinations.forEach { dest ->
+            linesList.add(LineData(origin, dest))
+        }
+        renderPointMarkers(clearExisting = true)
+    }
+
+    fun onPointAdded(point: FengShuiPoint, type: PointType) {
+        lastAddedPoint = point
+        lastAddedPointType = type
+        if (continuousAddMode) {
+            showPostSaveQuickActions = false
+            viewModel.openCrosshair(
+                crosshairManualTitle,
+                msgContinueAddHint,
+                mapProvider.getCameraPosition()?.target
+            )
+        } else {
+            showPostSaveQuickActions = true
+        }
+    }
+
+    fun removePointAndRefresh(point: FengShuiPoint) {
+        repo.deletePoint(point.id)
+        if (point.type == PointType.ORIGIN) {
+            originPoints.removeAll { it.id == point.id }
+            linesList.removeAll { it.origin.id == point.id }
+            if (selectedOriginPoint?.id == point.id) {
+                selectedOriginPoint = originPoints.firstOrNull()
+            }
+        } else {
+            destPoints.removeAll { it.id == point.id }
+            linesList.removeAll { it.destination.id == point.id }
+            selectedDestinationIds.removeAll { it == point.id }
+        }
+        refreshLinesForDisplay()
+    }
+
+    fun saveLifeCircleWizardState() {
+        val payload = "${currentProject?.id.orEmpty()}|$lifeCircleWizardStep|${lifeCircleHomeId.orEmpty()}|${lifeCircleWorkId.orEmpty()}"
+        Prefs.saveString(context, "life_circle_wizard_state", payload)
+    }
+
+    fun clearLifeCircleWizardState() {
+        Prefs.saveString(context, "life_circle_wizard_state", "")
+    }
     
     // 更新罗盘在屏幕上的位置（锁定模式下使用）
     fun updateCompassScreenPosition() {
@@ -410,6 +516,28 @@ fun MapScreen(
                 currentProject = projects[0]
                 loadProjectData(currentProject!!)
             }
+            Prefs.getString(context, "life_circle_wizard_state")
+                ?.takeIf { it.isNotBlank() }
+                ?.split("|")
+                ?.let { parts ->
+                    if (parts.size >= 4) {
+                        val projectId = parts[0]
+                        val step = parts[1].toIntOrNull() ?: 0
+                        if (projectId.isBlank() || projectId == currentProject?.id) {
+                            lifeCircleWizardStep = step.coerceIn(0, 3)
+                            lifeCircleHomeId = parts[2].ifBlank { null }
+                            lifeCircleWorkId = parts[3].ifBlank { null }
+                        }
+                    }
+                }
+        }
+    }
+
+    LaunchedEffect(lifeCircleWizardStep, lifeCircleHomeId, lifeCircleWorkId, currentProject?.id) {
+        if (lifeCircleWizardStep == 0) {
+            clearLifeCircleWizardState()
+        } else {
+            saveLifeCircleWizardState()
         }
     }
 
@@ -424,7 +552,7 @@ fun MapScreen(
         addPointUseNewProject = false
         addPointNewProjectName = ""
         showAddPointDialog = true
-        sideBarExpanded = true
+        openSidebarCollapsed()
         onQuickAddConsumed?.invoke()
     }
     
@@ -700,6 +828,15 @@ fun MapScreen(
                     projectName = currentProject?.name ?: caseNotSelected,
                     isLifeCircleSelection = ui.isLifeCircleSelection,
                     tempViewMode = ui.tempViewMode,
+                    continuousAddMode = continuousAddMode,
+                    continuousAddType = continuousAddType,
+                    onSwitchContinuousAddType = {
+                        continuousAddType = if (continuousAddType == PointType.ORIGIN) {
+                            PointType.DESTINATION
+                        } else {
+                            PointType.ORIGIN
+                        }
+                    },
                     onSelectOrigin = {
                         val target = ui.crosshairLocation ?: mapProvider.getCameraPosition()?.target
                         if (target == null) {
@@ -723,21 +860,9 @@ fun MapScreen(
                                     groupName = currentProject!!.name
                                 )
                                 originPoints.add(p)
-                                for (dest in destPoints) {
-                                    linesList.add(LineData(p, dest))
-                                    try {
-                                        val polyline = mapProvider.addPolyline(
-                                            com.fengshui.app.map.abstraction.UniversalLatLng(p.latitude, p.longitude),
-                                            com.fengshui.app.map.abstraction.UniversalLatLng(dest.latitude, dest.longitude),
-                                            width = 5f,
-                                            color = 0xFF0000FF.toInt()
-                                        )
-                                        lineByPolylineId[polyline.id] = LineData(p, dest)
-                                    } catch (polylineEx: Exception) {
-                                        android.util.Log.e("MapScreen", "Failed to add polyline: ${polylineEx.message}")
-                                    }
-                                }
                                 selectedOriginPoint = p
+                                selectedDestinationIds.clear()
+                                refreshLinesForDisplay()
                                 compassLocked = false
                                 lockedLat = null
                                 lockedLng = null
@@ -746,6 +871,7 @@ fun MapScreen(
                                     15f,
                                     CameraMoveSource.USER_POINT_SELECT
                                 )
+                                onPointAdded(p, PointType.ORIGIN)
                                 ui.crosshairMode = false
                             } catch (e: Exception) {
                                 android.util.Log.e("MapScreen", "Error adding origin point: ${e.message}", e)
@@ -777,20 +903,7 @@ fun MapScreen(
                                     groupName = currentProject!!.name
                                 )
                                 destPoints.add(p)
-                                for (origin in originPoints) {
-                                    linesList.add(LineData(origin, p))
-                                    try {
-                                        val polyline = mapProvider.addPolyline(
-                                            com.fengshui.app.map.abstraction.UniversalLatLng(origin.latitude, origin.longitude),
-                                            com.fengshui.app.map.abstraction.UniversalLatLng(p.latitude, p.longitude),
-                                            width = 5f,
-                                            color = 0xFF0000FF.toInt()
-                                        )
-                                        lineByPolylineId[polyline.id] = LineData(origin, p)
-                                    } catch (polylineEx: Exception) {
-                                        android.util.Log.e("MapScreen", "Failed to add polyline: ${polylineEx.message}")
-                                    }
-                                }
+                                refreshLinesForDisplay()
                                 compassLocked = false
                                 lockedLat = null
                                 lockedLng = null
@@ -799,6 +912,7 @@ fun MapScreen(
                                     15f,
                                     CameraMoveSource.USER_POINT_SELECT
                                 )
+                                onPointAdded(p, PointType.DESTINATION)
                                 ui.crosshairMode = false
                             } catch (e: Exception) {
                                 android.util.Log.e("MapScreen", "Error adding destination point: ${e.message}", e)
@@ -817,11 +931,12 @@ fun MapScreen(
                     .align(Alignment.Center)
                     .size(48.dp)
                     .clickable {
-                        viewModel.openCrosshair(
-                            crosshairManualTitle,
-                            crosshairManualSubtitle,
-                            mapProvider.getCameraPosition()?.target
-                        )
+                        addPointName = ""
+                        addPointType = continuousAddType
+                        addPointProjectId = currentProject?.id
+                        addPointUseNewProject = false
+                        addPointNewProjectName = ""
+                        showAddPointDialog = true
                     }
                     .zIndex(2f)  // 高于地图
                     .drawBehind {
@@ -863,17 +978,33 @@ fun MapScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(end = 8.dp, top = 48.dp)
+                    .padding(end = 6.dp, top = 44.dp)
                     .zIndex(2f)
-                    .background(Color(0xCCFFFFFF), RoundedCornerShape(10.dp))
+                    .width(150.dp)
+                    .background(Color(0xEEFFFFFF), RoundedCornerShape(16.dp))
                     .padding(8.dp)
             ) {
                 if (!sideBarExpanded) {
-                    Button(onClick = { sideBarExpanded = true }) {
+                    Button(
+                        onClick = { openSidebarCollapsed() },
+                        modifier = Modifier
+                            .width(118.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .heightIn(min = 40.dp),
+                        shape = RoundedCornerShape(22.dp)
+                    ) {
                         Text(stringResource(id = R.string.menu_open), fontSize = 12.sp)
                     }
                 } else {
-                    Button(onClick = { sideBarExpanded = false }) {
+                    Button(
+                        onClick = { sideBarExpanded = false },
+                        modifier = Modifier
+                            .width(118.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .heightIn(min = 38.dp),
+                        shape = RoundedCornerShape(21.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
+                    ) {
                         Text(stringResource(id = R.string.menu_collapse), fontSize = 12.sp)
                     }
 
@@ -883,183 +1014,255 @@ fun MapScreen(
                             .heightIn(max = 520.dp)
                             .verticalScroll(sidebarScrollState)
                     ) {
-                        // 罗盘锁定/解锁按钮
-                        Button(onClick = { 
-                            if (!compassLocked) {
-                                // 切换到锁定模式：保存当前位置
-                                val currentPos = mapProvider.getCameraPosition()?.target
-                                if (currentPos != null) {
-                                    lockedLat = currentPos.latitude
-                                    lockedLng = currentPos.longitude
-                                    compassLocked = true
-                                    updateCompassScreenPosition()
-                                } else {
-                                    trialMessage = msgNoLocation
-                                    showTrialDialog = true
-                                }
-                            } else {
-                                // 切换到解锁模式：清除锁定位置数据
-                                compassLocked = false
-                                lockedLat = null
-                                lockedLng = null
-                            }
-                        }) {
-                            Text(
-                                if (compassLocked) {
-                                    stringResource(id = R.string.action_unlock)
-                                } else {
-                                    stringResource(id = R.string.action_lock)
-                                },
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        SpacerSmall()
-                        
-                        // 定位按钮
-                        Button(onClick = {
-                            // 移动到当前GPS位置
-                            if (realGpsLat != null && realGpsLng != null) {
-                                requestCameraMove(
-                                    com.fengshui.app.map.abstraction.UniversalLatLng(
-                                        realGpsLat!!,
-                                        realGpsLng!!
-                                    ),
-                                    15f,
-                                    CameraMoveSource.USER_MANUAL
-                                )
-                                // 解锁罗盘并清除锁定位置数据
-                                compassLocked = false
-                                lockedLat = null
-                                lockedLng = null
-                            } else {
-                                trialMessage = msgGpsGetting
-                                showTrialDialog = true
-                            }
-                        }) {
-                            Text(stringResource(id = R.string.action_locate), fontSize = 12.sp)
-                        }
-
-                        SpacerSmall()
-
-                        MapControlButtons(
-                            currentMapType = currentMapType,
-                            currentProviderType = mapProviderType,
-                            hasGoogleMap = hasGoogleMap,
-                            hasAmapMap = hasAmapMap,
-                            onZoomIn = { mapProvider.zoomIn() },
-                            onZoomOut = { mapProvider.zoomOut() },
-                            onToggleMapType = { type ->
-                                currentMapType = type
-                                if (
-                                    type == MapType.SATELLITE &&
-                                    mapProviderType == MapProviderType.GOOGLE &&
-                                    hasAmapMap
-                                ) {
-                                    val center = mapProvider.getCameraPosition()?.target
-                                    val inChina = center?.let {
-                                        MapProviderSelector.isInChina(it.latitude, it.longitude)
-                                    } == true
-                                    if (inChina) {
-                                        onMapProviderSwitch(MapProviderType.AMAP)
-                                        trialMessage = msgGoogleSatelliteFallback
-                                        showTrialDialog = true
-                                        return@MapControlButtons
-                                    }
-                                }
-                                mapProvider.setMapType(type)
-                            },
-                            onSwitchProvider = onMapProviderSwitch
+                        val sideButtonModifier = Modifier
+                            .width(118.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .heightIn(min = 38.dp)
+                        SidebarSectionHeader(
+                            title = sectionMapTools,
+                            expanded = sectionMapToolsExpanded,
+                            onToggle = { sectionMapToolsExpanded = !sectionMapToolsExpanded }
                         )
-
-                        SpacerSmall()
-
-                        // 案例选择按钮
-                        Button(onClick = { 
-                            showProjectSelectDialog = true 
-                        }) {
-                            Text(
-                                stringResource(
-                                    id = R.string.label_case_with_name,
-                                    currentProject?.name ?: caseNone
-                                ),
-                                fontSize = 11.sp
-                            )
-                        }
-
-                        SpacerSmall()
-
-                        // 原点选择按钮
-                        Button(onClick = { 
-                            if (originPoints.isEmpty()) {
-                                trialMessage = msgNoOrigins
-                                showTrialDialog = true
-                            } else {
-                                showOriginSelectDialog = true
+                        if (sectionMapToolsExpanded) {
+                            Button(onClick = {
+                                if (!compassLocked) {
+                                    val currentPos = mapProvider.getCameraPosition()?.target
+                                    if (currentPos != null) {
+                                        lockedLat = currentPos.latitude
+                                        lockedLng = currentPos.longitude
+                                        compassLocked = true
+                                        updateCompassScreenPosition()
+                                    } else {
+                                        trialMessage = msgNoLocation
+                                        showTrialDialog = true
+                                    }
+                                } else {
+                                    compassLocked = false
+                                    lockedLat = null
+                                    lockedLng = null
+                                }
+                            }, modifier = sideButtonModifier) {
+                                Text(
+                                    if (compassLocked) stringResource(id = R.string.action_unlock) else stringResource(id = R.string.action_lock),
+                                    fontSize = 12.sp
+                                )
                             }
-                        }) {
-                            Text(stringResource(id = R.string.action_select_origin), fontSize = 12.sp)
-                        }
-
-                        SpacerSmall()
-
-                        Button(onClick = {
-                            if (originPoints.size < 3) {
-                                trialMessage = msgNeedThreeOrigins
-                                showTrialDialog = true
-                                return@Button
-                            }
-                            ui.showLifeCircleSelectDialog = true
-                        }) {
-                            Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 12.sp)
-                        }
-
-                        SpacerSmall()
-
-                        Button(onClick = {
-                            ui.showSectorConfigDialog = true
-                        }) {
-                            Text(stringResource(id = R.string.action_sector_search), fontSize = 11.sp)
-                        }
-
-                        SpacerSmall()
-
-                        Button(onClick = {
-                            addPointName = ""
-                            addPointType = PointType.ORIGIN
-                            addPointProjectId = currentProject?.id
-                            addPointUseNewProject = false
-                            addPointNewProjectName = ""
-                            showAddPointDialog = true
-                        }) {
-                            Text(stringResource(id = R.string.action_add_point), fontSize = 12.sp)
-                        }
-
-                        if (originPoint != null && destPoint != null) {
                             SpacerSmall()
                             Button(onClick = {
-                                // compute and show line info
-                                val bearing = RhumbLineUtils.calculateRhumbBearing(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
-                                val shan = RhumbLineUtils.getShanName(bearing)
-                                val bagua = RhumbLineUtils.getBaGua(bearing)
-                                val wuxing = RhumbLineUtils.getWuXing(bearing)
-                                val dist = RhumbLineUtils.haversineDistanceMeters(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
-                                lineInfoText = context.getString(
-                                    R.string.line_info_text,
-                                    originPoint!!.name,
-                                    destPoint!!.name,
-                                    originPoint!!.latitude,
-                                    originPoint!!.longitude,
-                                    destPoint!!.latitude,
-                                    destPoint!!.longitude,
-                                    bearing,
-                                    shan,
-                                    bagua,
-                                    wuxing,
-                                    dist
+                                if (realGpsLat != null && realGpsLng != null) {
+                                    requestCameraMove(
+                                        UniversalLatLng(realGpsLat!!, realGpsLng!!),
+                                        15f,
+                                        CameraMoveSource.USER_MANUAL
+                                    )
+                                    compassLocked = false
+                                    lockedLat = null
+                                    lockedLng = null
+                                } else {
+                                    trialMessage = msgGpsGetting
+                                    showTrialDialog = true
+                                }
+                            }, modifier = sideButtonModifier) {
+                                Text(stringResource(id = R.string.action_locate), fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            MapControlButtons(
+                                currentMapType = currentMapType,
+                                currentProviderType = mapProviderType,
+                                hasGoogleMap = hasGoogleMap,
+                                hasAmapMap = hasAmapMap,
+                                onZoomIn = { mapProvider.zoomIn() },
+                                onZoomOut = { mapProvider.zoomOut() },
+                                onToggleMapType = { type ->
+                                    currentMapType = type
+                                    if (
+                                        type == MapType.SATELLITE &&
+                                        mapProviderType == MapProviderType.GOOGLE &&
+                                        hasAmapMap
+                                    ) {
+                                        val center = mapProvider.getCameraPosition()?.target
+                                        val inChina = center?.let {
+                                            MapProviderSelector.isInChina(it.latitude, it.longitude)
+                                        } == true
+                                        if (inChina) {
+                                            onMapProviderSwitch(MapProviderType.AMAP)
+                                            trialMessage = msgGoogleSatelliteFallback
+                                            showTrialDialog = true
+                                            return@MapControlButtons
+                                        }
+                                    }
+                                    mapProvider.setMapType(type)
+                                },
+                                onSwitchProvider = onMapProviderSwitch
+                            )
+                            SpacerSmall()
+                        }
+
+                        SidebarSectionHeader(
+                            title = sectionCaseOps,
+                            expanded = sectionCaseExpanded,
+                            onToggle = { sectionCaseExpanded = !sectionCaseExpanded }
+                        )
+                        if (sectionCaseExpanded) {
+                            Button(onClick = { showProjectSelectDialog = true }, modifier = sideButtonModifier) {
+                                Text(
+                                    stringResource(
+                                        id = R.string.label_case_with_name,
+                                        currentProject?.name ?: caseNone
+                                    ),
+                                    fontSize = 11.sp
                                 )
-                                showLineInfo = true
-                            }) { Text(stringResource(id = R.string.action_show_line_info)) }
+                            }
+                            SpacerSmall()
+                            Button(onClick = {
+                                if (originPoints.isEmpty()) {
+                                    trialMessage = msgNoOrigins
+                                    showTrialDialog = true
+                                } else {
+                                    showOriginSelectDialog = true
+                                }
+                            }, modifier = sideButtonModifier) {
+                                Text(stringResource(id = R.string.action_select_origin), fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            Button(onClick = {
+                                if (currentProject == null) {
+                                    trialMessage = msgSelectCase
+                                    showTrialDialog = true
+                                } else if (destPoints.isEmpty()) {
+                                    trialMessage = msgNoDestinations
+                                    showTrialDialog = true
+                                } else {
+                                    showDestinationSelectDialog = true
+                                }
+                            }, modifier = sideButtonModifier) {
+                                Text(actionSelectDestination, fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            Button(onClick = {
+                                addPointName = ""
+                                addPointType = continuousAddType
+                                addPointProjectId = currentProject?.id
+                                addPointUseNewProject = false
+                                addPointNewProjectName = ""
+                                showAddPointDialog = true
+                            }, modifier = sideButtonModifier) {
+                                Text(stringResource(id = R.string.action_add_point), fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            Button(onClick = { continuousAddMode = !continuousAddMode }, modifier = sideButtonModifier) {
+                                Text(
+                                    if (continuousAddMode) actionContinuousAddModeOn else actionContinuousAddModeOff,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            SpacerSmall()
+                            Button(
+                                onClick = {
+                                    continuousAddType = if (continuousAddType == PointType.ORIGIN) PointType.DESTINATION else PointType.ORIGIN
+                                },
+                                modifier = sideButtonModifier
+                            ) {
+                                Text(actionContinuousCurrentType, fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                        }
+
+                        SidebarSectionHeader(
+                            title = sectionAnalysis,
+                            expanded = sectionAnalysisExpanded,
+                            onToggle = { sectionAnalysisExpanded = !sectionAnalysisExpanded }
+                        )
+                        if (sectionAnalysisExpanded) {
+                            Button(onClick = {
+                                if (originPoints.size < 3) {
+                                    trialMessage = msgNeedThreeOrigins
+                                    showTrialDialog = true
+                                    return@Button
+                                }
+                                lifeCircleHomeId = null
+                                lifeCircleWorkId = null
+                                lifeCircleWizardStep = 1
+                            }, modifier = sideButtonModifier) {
+                                Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            Button(onClick = { ui.showSectorConfigDialog = true }, modifier = sideButtonModifier) {
+                                Text(stringResource(id = R.string.action_sector_search), fontSize = 11.sp)
+                            }
+                            if (originPoint != null && destPoint != null) {
+                                SpacerSmall()
+                                Button(onClick = {
+                                    val bearing = RhumbLineUtils.calculateRhumbBearing(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
+                                    val shan = RhumbLineUtils.getShanName(bearing)
+                                    val bagua = RhumbLineUtils.getBaGua(bearing)
+                                    val wuxing = RhumbLineUtils.getWuXing(bearing)
+                                    val dist = RhumbLineUtils.haversineDistanceMeters(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
+                                    lineInfoText = context.getString(
+                                        R.string.line_info_text,
+                                        originPoint!!.name,
+                                        destPoint!!.name,
+                                        originPoint!!.latitude,
+                                        originPoint!!.longitude,
+                                        destPoint!!.latitude,
+                                        destPoint!!.longitude,
+                                        bearing,
+                                        shan,
+                                        bagua,
+                                        wuxing,
+                                        dist
+                                    )
+                                    showLineInfo = true
+                                }, modifier = sideButtonModifier) { Text(stringResource(id = R.string.action_show_line_info)) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showPostSaveQuickActions && !ui.crosshairMode && lastAddedPoint != null) {
+                val latest = lastAddedPoint!!
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 84.dp, start = 12.dp, end = 12.dp)
+                        .zIndex(4f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xEEFFFFFF), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "$msgPostSavedPoint: ${latest.name} (${if (lastAddedPointType == PointType.ORIGIN) msgPostSavedOrigin else msgPostSavedDestination})",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        SpacerSmall()
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        removePointAndRefresh(latest)
+                                        showPostSaveQuickActions = false
+                                        lastAddedPoint = null
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text(msgUndo, fontSize = 12.sp) }
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Button(
+                                onClick = {
+                                    showPostSaveQuickActions = false
+                                    viewModel.openCrosshair(
+                                        crosshairManualTitle,
+                                        msgContinueAddHint,
+                                        mapProvider.getCameraPosition()?.target
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text(msgContinueAdd, fontSize = 12.sp) }
                         }
                     }
                 }
@@ -1210,6 +1413,134 @@ fun MapScreen(
                 }
             }
 
+            if (lifeCircleWizardStep == 1) {
+                val selectedHomeName = originPoints.firstOrNull { it.id == lifeCircleHomeId }?.name
+                AlertDialog(
+                    onDismissRequest = { lifeCircleWizardStep = 0 },
+                    title = { Text(lifeCircleStepHome) },
+                    text = {
+                        Column {
+                            Text(lifeCircleStepHint, fontSize = 12.sp, color = Color.Gray)
+                            selectedHomeName?.let {
+                                SpacerSmall()
+                                Text("${stringResource(id = R.string.life_circle_role_home)}: $it", fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            originPoints.forEach { point ->
+                                Text(
+                                    text = point.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            lifeCircleHomeId = point.id
+                                            lifeCircleWizardStep = 2
+                                        }
+                                        .padding(10.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { lifeCircleWizardStep = 0 }) { Text(stringResource(id = R.string.action_cancel)) }
+                    }
+                )
+            }
+
+            if (lifeCircleWizardStep == 2) {
+                val candidates = originPoints.filter { it.id != lifeCircleHomeId }
+                val selectedHomeName = originPoints.firstOrNull { it.id == lifeCircleHomeId }?.name
+                val selectedWorkName = originPoints.firstOrNull { it.id == lifeCircleWorkId }?.name
+                AlertDialog(
+                    onDismissRequest = { lifeCircleWizardStep = 0 },
+                    title = { Text(lifeCircleStepWork) },
+                    text = {
+                        Column {
+                            Text(lifeCircleStepHint, fontSize = 12.sp, color = Color.Gray)
+                            selectedHomeName?.let {
+                                SpacerSmall()
+                                Text("${stringResource(id = R.string.life_circle_role_home)}: $it", fontSize = 12.sp)
+                            }
+                            selectedWorkName?.let {
+                                SpacerSmall()
+                                Text("${stringResource(id = R.string.life_circle_role_work)}: $it", fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            candidates.forEach { point ->
+                                Text(
+                                    text = point.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            lifeCircleWorkId = point.id
+                                            lifeCircleWizardStep = 3
+                                        }
+                                        .padding(10.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { lifeCircleWizardStep = 0 }) { Text(stringResource(id = R.string.action_cancel)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { lifeCircleWizardStep = 1 }) { Text(stringResource(id = R.string.action_previous_step)) }
+                    }
+                )
+            }
+
+            if (lifeCircleWizardStep == 3) {
+                val candidates = originPoints.filter { it.id != lifeCircleHomeId && it.id != lifeCircleWorkId }
+                val selectedHomeName = originPoints.firstOrNull { it.id == lifeCircleHomeId }?.name
+                val selectedWorkName = originPoints.firstOrNull { it.id == lifeCircleWorkId }?.name
+                AlertDialog(
+                    onDismissRequest = { lifeCircleWizardStep = 0 },
+                    title = { Text(lifeCircleStepEntertainment) },
+                    text = {
+                        Column {
+                            Text(lifeCircleStepHint, fontSize = 12.sp, color = Color.Gray)
+                            selectedHomeName?.let {
+                                SpacerSmall()
+                                Text("${stringResource(id = R.string.life_circle_role_home)}: $it", fontSize = 12.sp)
+                            }
+                            selectedWorkName?.let {
+                                SpacerSmall()
+                                Text("${stringResource(id = R.string.life_circle_role_work)}: $it", fontSize = 12.sp)
+                            }
+                            SpacerSmall()
+                            candidates.forEach { point ->
+                                Text(
+                                    text = point.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val home = originPoints.firstOrNull { it.id == lifeCircleHomeId }
+                                            val work = originPoints.firstOrNull { it.id == lifeCircleWorkId }
+                                            val entertainment = point
+                                            if (home != null && work != null) {
+                                                val selected = listOf(home, work, entertainment)
+                                                val assignments = mapOf(
+                                                    home.id to LifeCirclePointType.HOME,
+                                                    work.id to LifeCirclePointType.WORK,
+                                                    entertainment.id to LifeCirclePointType.ENTERTAINMENT
+                                                )
+                                                activateLifeCircleMode(selected, assignments)
+                                            }
+                                            lifeCircleWizardStep = 0
+                                        }
+                                        .padding(10.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { lifeCircleWizardStep = 0 }) { Text(stringResource(id = R.string.action_cancel)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { lifeCircleWizardStep = 2 }) { Text(stringResource(id = R.string.action_previous_step)) }
+                    }
+                )
+            }
+
             if (ui.showLifeCircleSelectDialog) {
                 LifeCircleOriginSelectDialog(
                     origins = originPoints,
@@ -1341,11 +1672,27 @@ fun MapScreen(
                             } else if (ui.sectorResults.isEmpty()) {
                                 Text(stringResource(id = R.string.sector_no_results))
                             } else {
+                                val effectiveKm = ui.sectorEffectiveRadiusMeters / 1000f
+                                Text(
+                                    stringResource(id = R.string.sector_effective_radius, effectiveKm),
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
                                 if (ui.sectorRadiusLimited) {
                                     Text(
                                         stringResource(id = R.string.sector_poi_radius_limited_notice),
                                         fontSize = 11.sp,
                                         color = Color.Gray
+                                    )
+                                }
+                                Spacer(modifier = Modifier.size(6.dp))
+                                Button(
+                                    onClick = { sectorSortByDistance = !sectorSortByDistance },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        if (sectorSortByDistance) msgSectorSortByDistance else msgSectorSortByName,
+                                        fontSize = 12.sp
                                     )
                                 }
                                 ui.sectorNoticeCount?.let { count ->
@@ -1355,7 +1702,18 @@ fun MapScreen(
                                         color = Color.Gray
                                     )
                                 }
-                                ui.sectorResults.forEach { poi ->
+                                val origin = ui.sectorOrigin
+                                val shownResults = if (sectorSortByDistance && origin != null) {
+                                    ui.sectorResults.sortedBy {
+                                        RhumbLineUtils.calculateRhumbDistance(
+                                            origin,
+                                            UniversalLatLng(it.lat, it.lng)
+                                        )
+                                    }
+                                } else {
+                                    ui.sectorResults.sortedBy { it.name }
+                                }
+                                shownResults.forEach { poi ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1365,6 +1723,17 @@ fun MapScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(poi.name)
                                             Text(poi.address ?: "", fontSize = 10.sp, color = Color.Gray)
+                                            if (origin != null) {
+                                                val dKm = RhumbLineUtils.calculateRhumbDistance(
+                                                    origin,
+                                                    UniversalLatLng(poi.lat, poi.lng)
+                                                ) / 1000f
+                                                Text(
+                                                    stringResource(id = R.string.sector_item_distance_km, dKm),
+                                                    fontSize = 10.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
                                         }
                                         Button(onClick = {
                                             val target = UniversalLatLng(poi.lat, poi.lng)
@@ -1391,9 +1760,7 @@ fun MapScreen(
                                                         groupName = currentProject!!.name
                                                     )
                                                     destPoints.add(p)
-                                                    for (origin in originPoints) {
-                                                        linesList.add(LineData(origin, p))
-                                                    }
+                                                    refreshLinesForDisplay()
                                                 } catch (e: Exception) {
                                                     trialMessage = e.message ?: msgAddDestinationFailed
                                                     showTrialDialog = true
@@ -1541,15 +1908,12 @@ fun MapScreen(
 
                                     if (addPointType == PointType.ORIGIN) {
                                         originPoints.add(p)
-                                        for (dest in destPoints) {
-                                            linesList.add(LineData(p, dest))
-                                        }
                                         selectedOriginPoint = p
+                                        selectedDestinationIds.clear()
+                                        refreshLinesForDisplay()
                                     } else {
                                         destPoints.add(p)
-                                        for (origin in originPoints) {
-                                            linesList.add(LineData(origin, p))
-                                        }
+                                        refreshLinesForDisplay()
                                     }
 
                                     compassLocked = false
@@ -1560,6 +1924,7 @@ fun MapScreen(
                                         15f,
                                         CameraMoveSource.USER_POINT_SELECT
                                     )
+                                    onPointAdded(p, addPointType)
                                     sideBarExpanded = false
 
                                     showAddPointDialog = false
@@ -1607,6 +1972,61 @@ fun MapScreen(
                 )
             }
 
+            if (showDestinationSelectDialog) {
+                MultiSelectDestinationDialog(
+                    destinations = destPoints,
+                    selectedIds = selectedDestinationIds.toSet(),
+                    onConfirm = { selectedIds ->
+                        pendingDestinationIds.clear()
+                        pendingDestinationIds.addAll(selectedIds)
+                        showDestinationSelectDialog = false
+                        showOriginAfterDestinationDialog = true
+                    },
+                    onDismiss = { showDestinationSelectDialog = false }
+                )
+            }
+
+            if (showOriginAfterDestinationDialog && originPoints.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = { showOriginAfterDestinationDialog = false },
+                    title = { Text(stringResource(id = R.string.select_origin_title)) },
+                    text = {
+                        Column {
+                            originPoints.forEach { point ->
+                                Text(
+                                    text = "${point.name} (${point.latitude.format(4)}, ${point.longitude.format(4)})",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedOriginPoint = point
+                                            selectedDestinationIds.clear()
+                                            selectedDestinationIds.addAll(pendingDestinationIds)
+                                            refreshLinesForDisplay()
+                                            lockedLat = point.latitude
+                                            lockedLng = point.longitude
+                                            compassLocked = true
+                                            updateCompassScreenPosition()
+                                            requestCameraMove(
+                                                UniversalLatLng(point.latitude, point.longitude),
+                                                15f,
+                                                CameraMoveSource.USER_POINT_SELECT
+                                            )
+                                            showOriginAfterDestinationDialog = false
+                                        }
+                                        .padding(12.dp),
+                                    color = if (point.id == selectedOriginPoint?.id) Color.Blue else Color.Black
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showOriginAfterDestinationDialog = false }) {
+                            Text(stringResource(id = R.string.action_close))
+                        }
+                    }
+                )
+            }
+
             // 原点选择对话框
             if (showOriginSelectDialog && originPoints.isNotEmpty()) {
                 AlertDialog(
@@ -1621,6 +2041,8 @@ fun MapScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedOriginPoint = point
+                                            selectedDestinationIds.clear()
+                                            refreshLinesForDisplay()
                                             // 锁定罗盘到原点位置
                                             lockedLat = point.latitude
                                             lockedLng = point.longitude
@@ -1659,6 +2081,27 @@ private fun sectorSpanDegrees(start: Float, end: Float): Float {
     } else {
         (360f - start) + end
     }
+}
+
+@Composable
+private fun SidebarSectionHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Button(
+        onClick = onToggle,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Text(
+            text = if (expanded) "▼ $title" else "▶ $title",
+            fontSize = 11.sp
+        )
+    }
+    SpacerSmall()
 }
 
 @Composable

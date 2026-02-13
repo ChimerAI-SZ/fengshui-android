@@ -118,10 +118,12 @@ class MapUiStateViewModel : ViewModel() {
         ui.sectorConfigLabel = config.label
         ui.sectorLoading = true
         ui.sectorRadiusLimited = false
+        ui.sectorEffectiveRadiusMeters = config.maxDistanceMeters.toInt()
 
         viewModelScope.launch {
             try {
                 val searchRadius = config.maxDistanceMeters.toInt().coerceAtMost(250_000)
+                ui.sectorEffectiveRadiusMeters = searchRadius
                 if (config.maxDistanceMeters > 250_000f) {
                     ui.sectorRadiusLimited = true
                 }

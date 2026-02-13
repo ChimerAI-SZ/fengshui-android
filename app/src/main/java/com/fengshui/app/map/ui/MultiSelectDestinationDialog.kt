@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fengshui.app.data.FengShuiPoint
@@ -71,6 +72,22 @@ fun MultiSelectDestinationDialog(
                         )
                     }
                 } else {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { localSelected = destinations.map { it.id }.toSet() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(id = R.string.action_select_all_destinations), textAlign = TextAlign.Center)
+                        }
+                        Box(modifier = Modifier.size(8.dp))
+                        Button(
+                            onClick = { localSelected = emptySet() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(id = R.string.action_clear_all_destinations), textAlign = TextAlign.Center)
+                        }
+                    }
+                    Box(modifier = Modifier.size(8.dp))
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(destinations) { point ->
                             DestinationListItem(

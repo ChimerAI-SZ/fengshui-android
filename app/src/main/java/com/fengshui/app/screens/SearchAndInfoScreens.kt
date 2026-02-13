@@ -48,6 +48,9 @@ import com.fengshui.app.utils.ApiKeyConfig
 import com.fengshui.app.map.ui.RegistrationDialog
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import java.util.Locale
 
 /**
@@ -67,9 +70,18 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     onNavigateToMap: (PoiResult) -> Unit = {}
 ) {
+    data class SearchRunResult(
+        val results: List<PoiResult>,
+        val activeProviderName: String,
+        val attemptedProviders: List<String>,
+        val hintMessage: String?
+    )
+
     var searchQuery by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf(listOf<PoiResult>()) }
+    var providerTrace by remember { mutableStateOf("") }
+    var searchHint by remember { mutableStateOf<String?>(null) }
     var showCaseSelectDialog by remember { mutableStateOf(false) }
     var selectedPoi by remember { mutableStateOf<PoiResult?>(null) }
     var savePointType by remember { mutableStateOf(PointType.DESTINATION) }
@@ -108,7 +120,14 @@ fun SearchScreen(
     }
     val scope = rememberCoroutineScope()
 
-    suspend fun runSearch(query: String): List<PoiResult> {
+    fun isNetworkAvailable(ctx: Context): Boolean {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    suspend fun runSearch(query: String): SearchRunResult {
         val hasChineseChars = query.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
         val providers = buildList<Pair<String, MapPoiProvider>> {
             if ((isChinaLocale || hasChineseChars) && providerAmap != null) {
@@ -124,25 +143,48 @@ fun SearchScreen(
             add(context.getString(R.string.provider_mock) to providerMock)
         }
 
+        val attempts = mutableListOf<String>()
         providers.forEach { (name, provider) ->
             val list = provider.searchByKeyword(query.trim())
+            attempts.add(name)
             if (list.isNotEmpty()) {
                 providerName = name
-                return list
+                return SearchRunResult(
+                    results = list,
+                    activeProviderName = name,
+                    attemptedProviders = attempts,
+                    hintMessage = null
+                )
             }
         }
-        return emptyList()
+        val hint = if (!isNetworkAvailable(context)) {
+            context.getString(R.string.search_hint_no_network)
+        } else {
+            context.getString(R.string.search_hint_no_result_provider)
+        }
+        return SearchRunResult(
+            results = emptyList(),
+            activeProviderName = providerName,
+            attemptedProviders = attempts,
+            hintMessage = hint
+        )
     }
 
     LaunchedEffect(searchQuery) {
         if (searchQuery.isBlank()) {
             results = emptyList()
+            providerTrace = ""
+            searchHint = null
             loading = false
             return@LaunchedEffect
         }
         loading = true
         delay(350)
-        results = runSearch(searchQuery)
+        val searchResult = runSearch(searchQuery)
+        providerName = searchResult.activeProviderName
+        providerTrace = searchResult.attemptedProviders.joinToString(" -> ")
+        searchHint = searchResult.hintMessage
+        results = searchResult.results
         loading = false
     }
 
@@ -185,7 +227,11 @@ fun SearchScreen(
                     if (searchQuery.isNotBlank()) {
                         loading = true
                         scope.launch {
-                            results = runSearch(searchQuery)
+                            val searchResult = runSearch(searchQuery)
+                            providerName = searchResult.activeProviderName
+                            providerTrace = searchResult.attemptedProviders.joinToString(" -> ")
+                            searchHint = searchResult.hintMessage
+                            results = searchResult.results
                             loading = false
                         }
                     }
@@ -220,6 +266,13 @@ fun SearchScreen(
                     fontSize = 10.sp,
                     color = Color.Gray
                 )
+                if (providerTrace.isNotBlank()) {
+                    Text(
+                        stringResource(id = R.string.search_provider_trace, providerTrace),
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
             }
 
             // 结果列表
@@ -242,6 +295,14 @@ fun SearchScreen(
                         color = Color.Gray,
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                    searchHint?.let { hint ->
+                        Text(
+                            text = hint,
+                            fontSize = 10.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {

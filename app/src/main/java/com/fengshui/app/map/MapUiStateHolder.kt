@@ -44,6 +44,7 @@ class MapUiStateHolder {
     var sectorConfigLabel by mutableStateOf("")
     var sectorNoticeCount by mutableStateOf<Int?>(null)
     var sectorRadiusLimited by mutableStateOf(false)
+    var sectorEffectiveRadiusMeters by mutableStateOf(0)
     var sectorOverlayVisible by mutableStateOf(false)
     var sectorUseMapCenterOrigin by mutableStateOf(false)
     var sectorRenderTick by mutableStateOf(0)

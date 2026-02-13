@@ -34,6 +34,9 @@
     <string name="action_quick_add_point">快速加点</string>
     <string name="action_add_to_case">添加到案例</string>
     <string name="action_select_origin">原点</string>
+    <string name="action_select_destination">终点</string>
+    <string name="action_select_all_destinations">全选</string>
+    <string name="action_clear_all_destinations">清空</string>
     <string name="action_add_point">加点</string>
     <string name="action_show_line_info">显示连线信息</string>
     <string name="action_life_circle_mode">生活圈</string>
@@ -52,12 +55,17 @@
     <string name="action_cancel_new_case">取消新建案例</string>
     <string name="action_create_new_case">新建案例</string>
     <string name="action_create_case_and_save">新建案例并保存</string>
+    <string name="action_undo">撤销</string>
+    <string name="action_continue_add">继续加点</string>
+    <string name="action_switch_point_type">切换类型</string>
+    <string name="action_previous_step">上一步</string>
 
     <string name="crosshair_current_case">当前案例: %1$s</string>
     <string name="crosshair_search_title">搜索位置</string>
     <string name="crosshair_search_subtitle">拖动地图微调后保存</string>
     <string name="crosshair_manual_title">手动选点</string>
     <string name="crosshair_manual_subtitle">拖动地图对准位置后保存</string>
+    <string name="crosshair_continue_add_subtitle">继续在十字准星位置加点</string>
     <string name="crosshair_not_located">未定位</string>
 
     <string name="case_empty_title">暂无案例</string>
@@ -131,10 +139,14 @@
     <string name="life_circle_mode_label">生活圈模式</string>
     <string name="life_circle_show_info">指入</string>
     <string name="life_circle_no_data">暂无生活圈数据</string>
+    <string name="life_circle_step_home">第1步：选择家</string>
+    <string name="life_circle_step_work">第2步：选择公司</string>
+    <string name="life_circle_step_entertainment">第3步：选择日常场所</string>
+    <string name="life_circle_step_hint">为当前角色选择一个原点。</string>
     <string name="err_select_three_origins">请为三个角色分别选择原点</string>
     <string name="err_need_three_origins">生活圈模式需要至少 3 个原点</string>
     <string name="err_select_origin_first">请先选择原点</string>
-    <string name="err_no_origin_points">暂无原点，请先添加</string>
+    <string name="err_no_origin_points">暂无原点，请在堪舆管理中添加。</string>
 
     <string name="sector_search_title">扇形区域搜索</string>
     <string name="sector_mode_shan">24山</string>
@@ -148,6 +160,17 @@
     <string name="sector_search_loading">搜索中...</string>
     <string name="sector_no_results">没有符合条件的结果</string>
     <string name="sector_notice">已显示前 %1$d 个结果</string>
+    <string name="sector_effective_radius">实际检索半径：%1$.1f km</string>
+    <string name="sector_sort_distance">排序：按距离</string>
+    <string name="sector_sort_name">排序：按名称</string>
+    <string name="sector_item_distance_km">距离：%1$.2f km</string>
+    <string name="post_save_point_saved">已保存点位</string>
+    <string name="section_map_tools">地图工具</string>
+    <string name="section_case_ops">案例操作</string>
+    <string name="section_analysis">分析功能</string>
+    <string name="action_continuous_add_on">连续加点：开</string>
+    <string name="action_continuous_add_off">连续加点：关</string>
+    <string name="action_continuous_current_type">当前类型：%1$s</string>
     <string name="sector_keyword_hint">不填关键词时只绘制扇形区域</string>
     <string name="sector_distance_hint">距离范围：100米 到 5000千米</string>
     <string name="sector_invalid_distance">请输入有效数字</string>
@@ -163,7 +186,7 @@
 
     <string name="select_origin_title">选择原点</string>
     <string name="select_destination_title">选择终点</string>
-    <string name="no_destination_tip">暂无终点，请先在地图上添加终点</string>
+    <string name="no_destination_tip">暂无终点，请在堪舆管理中添加。</string>
 
     <string name="search_title">地址搜索</string>
     <string name="search_input_label">输入地址、地点或坐标</string>
@@ -173,6 +196,9 @@
     <string name="search_loading">搜索中...</string>
     <string name="search_empty">搜索结果将在此显示</string>
     <string name="search_provider_label">当前提供方：%1$s</string>
+    <string name="search_provider_trace">已尝试搜索源：%1$s</string>
+    <string name="search_hint_no_network">检测到网络不可用，请检查手机或模拟器网络。</string>
+    <string name="search_hint_no_result_provider">当前搜索源无结果，建议输入更完整地名或切换地图。</string>
     <string name="search_result_coordinates">%1$.4f, %2$.4f</string>
     <string name="save_to_case">保存到 "%1$s"</string>
 

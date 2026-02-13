@@ -34,17 +34,17 @@ fun MapControlButtons(
     onSwitchProvider: (MapProviderType) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val providerButtonWidth = 132.dp
+    val providerButtonWidth = 96.dp
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
     ) {
-        Button(onClick = onZoomIn, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) {
+        Button(onClick = onZoomIn, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) {
             Text("+", color = Color.White)
         }
 
-        Button(onClick = onZoomOut, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(44.dp)) {
+        Button(onClick = onZoomOut, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) {
             Text("-", color = Color.White)
         }
 
@@ -55,14 +55,14 @@ fun MapControlButtons(
         }
         Button(
             onClick = { onToggleMapType(if (currentMapType == MapType.VECTOR) MapType.SATELLITE else MapType.VECTOR) },
-            modifier = Modifier.size(width = providerButtonWidth, height = 64.dp),
+            modifier = Modifier.size(width = providerButtonWidth, height = 48.dp),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
         ) {
             Text(
                 text = label,
                 maxLines = 1,
                 softWrap = false,
-                fontSize = 14.sp
+                fontSize = 13.sp
             )
         }
 
@@ -71,7 +71,7 @@ fun MapControlButtons(
         Button(
             enabled = hasGoogleMap,
             onClick = { onSwitchProvider(MapProviderType.GOOGLE) },
-            modifier = Modifier.size(width = providerButtonWidth, height = 72.dp),
+            modifier = Modifier.size(width = providerButtonWidth, height = 50.dp),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             colors = if (googleSelected) {
                 ButtonDefaults.buttonColors()
@@ -86,7 +86,7 @@ fun MapControlButtons(
                 text = googleLabel,
                 maxLines = 1,
                 softWrap = false,
-                fontSize = 14.sp
+                fontSize = 13.sp
             )
         }
 
@@ -95,7 +95,7 @@ fun MapControlButtons(
         Button(
             enabled = hasAmapMap,
             onClick = { onSwitchProvider(MapProviderType.AMAP) },
-            modifier = Modifier.size(width = providerButtonWidth, height = 72.dp),
+            modifier = Modifier.size(width = providerButtonWidth, height = 50.dp),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             colors = if (amapSelected) {
                 ButtonDefaults.buttonColors()
@@ -110,7 +110,7 @@ fun MapControlButtons(
                 text = amapLabel,
                 maxLines = 1,
                 softWrap = false,
-                fontSize = 14.sp
+                fontSize = 13.sp
             )
         }
     }
