@@ -168,6 +168,11 @@
     <string name="section_map_tools">Map tools</string>
     <string name="section_case_ops">Case ops</string>
     <string name="section_analysis">Analysis</string>
+    <string name="subsection_compass_tools">Compass &amp; Locate</string>
+    <string name="subsection_map_layers">Map &amp; Layers</string>
+    <string name="subsection_case_select">Case &amp; Filters</string>
+    <string name="subsection_case_edit">Point Entry</string>
+    <string name="subsection_analysis_core">Core Analysis</string>
     <string name="action_continuous_add_on">Continuous add: On</string>
     <string name="action_continuous_add_off">Continuous add: Off</string>
     <string name="action_continuous_current_type">Current type: %1$s</string>

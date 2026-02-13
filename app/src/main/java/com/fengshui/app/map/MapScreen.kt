@@ -216,6 +216,11 @@ fun MapScreen(
     var sectionMapToolsExpanded by remember { mutableStateOf(false) }
     var sectionCaseExpanded by remember { mutableStateOf(false) }
     var sectionAnalysisExpanded by remember { mutableStateOf(false) }
+    var subMapCompassExpanded by remember { mutableStateOf(false) }
+    var subMapLayersExpanded by remember { mutableStateOf(false) }
+    var subCaseSelectionExpanded by remember { mutableStateOf(false) }
+    var subCaseEditExpanded by remember { mutableStateOf(false) }
+    var subAnalysisCoreExpanded by remember { mutableStateOf(false) }
     var lifeCircleWizardStep by remember { mutableStateOf(0) } // 0 none, 1 home, 2 work, 3 entertainment
     var lifeCircleHomeId by remember { mutableStateOf<String?>(null) }
     var lifeCircleWorkId by remember { mutableStateOf<String?>(null) }
@@ -272,16 +277,25 @@ fun MapScreen(
     
     // 地图是否已初始化
     val mapReady = remember { mutableStateOf(false) }
+    var lastProviderType by remember { mutableStateOf<MapProviderType?>(null) }
 
     fun openSidebarCollapsed() {
         sectionMapToolsExpanded = false
         sectionCaseExpanded = false
         sectionAnalysisExpanded = false
+        subMapCompassExpanded = false
+        subMapLayersExpanded = false
+        subCaseSelectionExpanded = false
+        subCaseEditExpanded = false
+        subAnalysisCoreExpanded = false
         sideBarExpanded = true
     }
 
     LaunchedEffect(mapProviderType) {
-        mapReady.value = false
+        if (lastProviderType != null && lastProviderType != mapProviderType) {
+            mapReady.value = false
+        }
+        lastProviderType = mapProviderType
         lineByPolylineId.clear()
     }
     
@@ -302,13 +316,10 @@ fun MapScreen(
                 android.util.Log.d("MapScreen", "Origins: ${originPoints.size}, Destinations: ${destPoints.size}")
                 
                 selectedDestinationIds.clear()
-                if (originPoints.isNotEmpty()) {
-                    selectedOriginPoint = originPoints[0]
-                } else {
-                    selectedOriginPoint = null
-                }
+                selectedOriginPoint = originPoints.firstOrNull()
                 linesList.clear()
-                selectedOriginPoint?.let { origin ->
+                val origin = selectedOriginPoint
+                if (origin != null) {
                     destPoints.forEach { dest ->
                         linesList.add(LineData(origin, dest))
                     }
@@ -436,17 +447,26 @@ fun MapScreen(
         linesList.clear()
         val origin = selectedOriginPoint ?: originPoints.firstOrNull()
         if (origin == null) {
+            android.util.Log.d("MapScreen", "refreshLinesForDisplay skipped: no origin in current case")
             renderPointMarkers(clearExisting = true)
             return
         }
-        val activeDestinations = if (selectedDestinationIds.isEmpty()) {
+        var activeDestinations = if (selectedDestinationIds.isEmpty()) {
             destPoints
         } else {
             destPoints.filter { selectedDestinationIds.contains(it.id) }
         }
+        if (activeDestinations.isEmpty() && destPoints.isNotEmpty()) {
+            selectedDestinationIds.clear()
+            activeDestinations = destPoints
+        }
         activeDestinations.forEach { dest ->
             linesList.add(LineData(origin, dest))
         }
+        android.util.Log.d(
+            "MapScreen",
+            "refreshLinesForDisplay case=${currentProject?.name} origin=${origin.name} destCount=${activeDestinations.size} lineCount=${linesList.size}"
+        )
         renderPointMarkers(clearExisting = true)
     }
 
@@ -557,7 +577,7 @@ fun MapScreen(
     }
     
     // 当linesList改变时，重新绘制所有连线
-    LaunchedEffect(linesList.size, lineRefreshToken, ui.lifeCircleMode) {
+    LaunchedEffect(linesList.size, lineRefreshToken, ui.lifeCircleMode, mapReady.value, mapProviderType) {
         if (ui.lifeCircleMode) {
             return@LaunchedEffect
         }
@@ -596,6 +616,13 @@ fun MapScreen(
             viewModel.openCrosshair(crosshairSearchTitle, crosshairSearchSubtitle, target)
             requestCameraMove(target, 16f, CameraMoveSource.SEARCH_RESULT)
             onFocusConsumed?.invoke()
+        }
+    }
+
+    LaunchedEffect(currentProject?.id, originPoints.size, destPoints.size, mapReady.value, mapProviderType, ui.lifeCircleMode) {
+        if (!ui.lifeCircleMode && mapReady.value) {
+            refreshLinesForDisplay()
+            refreshNormalLines()
         }
     }
     
@@ -712,6 +739,8 @@ fun MapScreen(
                                     showLineInfoFor(line)
                                 }
                             }
+                            refreshLinesForDisplay()
+                            refreshNormalLines()
                         }
                     )
                 }
@@ -726,6 +755,14 @@ fun MapScreen(
                         onMapReady = {
                             mapReady.value = true
                             mapProvider.setMapType(currentMapType)
+                            mapProvider.setOnPolylineClickListener { polyline ->
+                                val line = lineByPolylineId[polyline.id]
+                                if (line != null) {
+                                    showLineInfoFor(line)
+                                }
+                            }
+                            refreshLinesForDisplay()
+                            refreshNormalLines()
                         }
                     )
                 }
@@ -903,6 +940,7 @@ fun MapScreen(
                                     groupName = currentProject!!.name
                                 )
                                 destPoints.add(p)
+                                selectedDestinationIds.clear()
                                 refreshLinesForDisplay()
                                 compassLocked = false
                                 lockedLat = null
@@ -988,9 +1026,9 @@ fun MapScreen(
                     Button(
                         onClick = { openSidebarCollapsed() },
                         modifier = Modifier
-                            .width(118.dp)
+                            .width(92.dp)
                             .align(Alignment.CenterHorizontally)
-                            .heightIn(min = 40.dp),
+                            .heightIn(min = 36.dp),
                         shape = RoundedCornerShape(22.dp)
                     ) {
                         Text(stringResource(id = R.string.menu_open), fontSize = 12.sp)
@@ -999,9 +1037,9 @@ fun MapScreen(
                     Button(
                         onClick = { sideBarExpanded = false },
                         modifier = Modifier
-                            .width(118.dp)
+                            .width(98.dp)
                             .align(Alignment.CenterHorizontally)
-                            .heightIn(min = 38.dp),
+                            .heightIn(min = 36.dp),
                         shape = RoundedCornerShape(21.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
                     ) {
@@ -1014,156 +1052,205 @@ fun MapScreen(
                             .heightIn(max = 520.dp)
                             .verticalScroll(sidebarScrollState)
                     ) {
-                        val sideButtonModifier = Modifier
-                            .width(118.dp)
+                        val sectionButtonModifier = Modifier
+                            .width(116.dp)
                             .align(Alignment.CenterHorizontally)
                             .heightIn(min = 38.dp)
+                        val subHeaderModifier = Modifier
+                            .width(104.dp)
+                            .align(Alignment.End)
+                            .heightIn(min = 34.dp)
+                        val subButtonModifier = Modifier
+                            .width(102.dp)
+                            .align(Alignment.End)
+                            .heightIn(min = 34.dp)
                         SidebarSectionHeader(
                             title = sectionMapTools,
                             expanded = sectionMapToolsExpanded,
-                            onToggle = { sectionMapToolsExpanded = !sectionMapToolsExpanded }
+                            onToggle = { sectionMapToolsExpanded = !sectionMapToolsExpanded },
+                            modifier = sectionButtonModifier
                         )
                         if (sectionMapToolsExpanded) {
-                            Button(onClick = {
-                                if (!compassLocked) {
-                                    val currentPos = mapProvider.getCameraPosition()?.target
-                                    if (currentPos != null) {
-                                        lockedLat = currentPos.latitude
-                                        lockedLng = currentPos.longitude
-                                        compassLocked = true
-                                        updateCompassScreenPosition()
+                            SidebarSubSectionHeader(
+                                title = stringResource(id = R.string.subsection_compass_tools),
+                                expanded = subMapCompassExpanded,
+                                onToggle = { subMapCompassExpanded = !subMapCompassExpanded },
+                                modifier = subHeaderModifier
+                            )
+                            if (subMapCompassExpanded) {
+                                Button(onClick = {
+                                    if (!compassLocked) {
+                                        val currentPos = mapProvider.getCameraPosition()?.target
+                                        if (currentPos != null) {
+                                            lockedLat = currentPos.latitude
+                                            lockedLng = currentPos.longitude
+                                            compassLocked = true
+                                            updateCompassScreenPosition()
+                                        } else {
+                                            trialMessage = msgNoLocation
+                                            showTrialDialog = true
+                                        }
                                     } else {
-                                        trialMessage = msgNoLocation
+                                        compassLocked = false
+                                        lockedLat = null
+                                        lockedLng = null
+                                    }
+                                }, modifier = subButtonModifier) {
+                                    Text(
+                                        if (compassLocked) stringResource(id = R.string.action_unlock) else stringResource(id = R.string.action_lock),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                SpacerSmall()
+                                Button(onClick = {
+                                    if (realGpsLat != null && realGpsLng != null) {
+                                        requestCameraMove(
+                                            UniversalLatLng(realGpsLat!!, realGpsLng!!),
+                                            15f,
+                                            CameraMoveSource.USER_MANUAL
+                                        )
+                                        compassLocked = false
+                                        lockedLat = null
+                                        lockedLng = null
+                                    } else {
+                                        trialMessage = msgGpsGetting
                                         showTrialDialog = true
                                     }
-                                } else {
-                                    compassLocked = false
-                                    lockedLat = null
-                                    lockedLng = null
+                                }, modifier = subButtonModifier) {
+                                    Text(stringResource(id = R.string.action_locate), fontSize = 11.sp)
                                 }
-                            }, modifier = sideButtonModifier) {
-                                Text(
-                                    if (compassLocked) stringResource(id = R.string.action_unlock) else stringResource(id = R.string.action_lock),
-                                    fontSize = 12.sp
-                                )
+                                SpacerSmall()
                             }
-                            SpacerSmall()
-                            Button(onClick = {
-                                if (realGpsLat != null && realGpsLng != null) {
-                                    requestCameraMove(
-                                        UniversalLatLng(realGpsLat!!, realGpsLng!!),
-                                        15f,
-                                        CameraMoveSource.USER_MANUAL
-                                    )
-                                    compassLocked = false
-                                    lockedLat = null
-                                    lockedLng = null
-                                } else {
-                                    trialMessage = msgGpsGetting
-                                    showTrialDialog = true
-                                }
-                            }, modifier = sideButtonModifier) {
-                                Text(stringResource(id = R.string.action_locate), fontSize = 12.sp)
-                            }
-                            SpacerSmall()
-                            MapControlButtons(
-                                currentMapType = currentMapType,
-                                currentProviderType = mapProviderType,
-                                hasGoogleMap = hasGoogleMap,
-                                hasAmapMap = hasAmapMap,
-                                onZoomIn = { mapProvider.zoomIn() },
-                                onZoomOut = { mapProvider.zoomOut() },
-                                onToggleMapType = { type ->
-                                    currentMapType = type
-                                    if (
-                                        type == MapType.SATELLITE &&
-                                        mapProviderType == MapProviderType.GOOGLE &&
-                                        hasAmapMap
-                                    ) {
-                                        val center = mapProvider.getCameraPosition()?.target
-                                        val inChina = center?.let {
-                                            MapProviderSelector.isInChina(it.latitude, it.longitude)
-                                        } == true
-                                        if (inChina) {
-                                            onMapProviderSwitch(MapProviderType.AMAP)
-                                            trialMessage = msgGoogleSatelliteFallback
-                                            showTrialDialog = true
-                                            return@MapControlButtons
-                                        }
-                                    }
-                                    mapProvider.setMapType(type)
-                                },
-                                onSwitchProvider = onMapProviderSwitch
+
+                            SidebarSubSectionHeader(
+                                title = stringResource(id = R.string.subsection_map_layers),
+                                expanded = subMapLayersExpanded,
+                                onToggle = { subMapLayersExpanded = !subMapLayersExpanded },
+                                modifier = subHeaderModifier
                             )
+                            if (subMapLayersExpanded) {
+                                MapControlButtons(
+                                    currentMapType = currentMapType,
+                                    currentProviderType = mapProviderType,
+                                    hasGoogleMap = hasGoogleMap,
+                                    hasAmapMap = hasAmapMap,
+                                    onZoomIn = { mapProvider.zoomIn() },
+                                    onZoomOut = { mapProvider.zoomOut() },
+                                    onToggleMapType = { type ->
+                                        currentMapType = type
+                                        if (
+                                            type == MapType.SATELLITE &&
+                                            mapProviderType == MapProviderType.GOOGLE &&
+                                            hasAmapMap
+                                        ) {
+                                            val center = mapProvider.getCameraPosition()?.target
+                                            val inChina = center?.let {
+                                                MapProviderSelector.isInChina(it.latitude, it.longitude)
+                                            } == true
+                                            if (inChina) {
+                                                onMapProviderSwitch(MapProviderType.AMAP)
+                                                trialMessage = msgGoogleSatelliteFallback
+                                                showTrialDialog = true
+                                                return@MapControlButtons
+                                            }
+                                        }
+                                        mapProvider.setMapType(type)
+                                    },
+                                    onSwitchProvider = onMapProviderSwitch,
+                                    modifier = Modifier
+                                        .align(Alignment.End)
+                                        .padding(end = 2.dp)
+                                )
+                                SpacerSmall()
+                            }
                             SpacerSmall()
                         }
 
                         SidebarSectionHeader(
                             title = sectionCaseOps,
                             expanded = sectionCaseExpanded,
-                            onToggle = { sectionCaseExpanded = !sectionCaseExpanded }
+                            onToggle = { sectionCaseExpanded = !sectionCaseExpanded },
+                            modifier = sectionButtonModifier
                         )
                         if (sectionCaseExpanded) {
-                            Button(onClick = { showProjectSelectDialog = true }, modifier = sideButtonModifier) {
-                                Text(
-                                    stringResource(
-                                        id = R.string.label_case_with_name,
-                                        currentProject?.name ?: caseNone
-                                    ),
-                                    fontSize = 11.sp
-                                )
-                            }
-                            SpacerSmall()
-                            Button(onClick = {
-                                if (originPoints.isEmpty()) {
-                                    trialMessage = msgNoOrigins
-                                    showTrialDialog = true
-                                } else {
-                                    showOriginSelectDialog = true
+                            SidebarSubSectionHeader(
+                                title = stringResource(id = R.string.subsection_case_select),
+                                expanded = subCaseSelectionExpanded,
+                                onToggle = { subCaseSelectionExpanded = !subCaseSelectionExpanded },
+                                modifier = subHeaderModifier
+                            )
+                            if (subCaseSelectionExpanded) {
+                                Button(onClick = { showProjectSelectDialog = true }, modifier = subButtonModifier) {
+                                    Text(
+                                        stringResource(
+                                            id = R.string.label_case_with_name,
+                                            currentProject?.name ?: caseNone
+                                        ),
+                                        fontSize = 10.sp
+                                    )
                                 }
-                            }, modifier = sideButtonModifier) {
-                                Text(stringResource(id = R.string.action_select_origin), fontSize = 12.sp)
-                            }
-                            SpacerSmall()
-                            Button(onClick = {
-                                if (currentProject == null) {
-                                    trialMessage = msgSelectCase
-                                    showTrialDialog = true
-                                } else if (destPoints.isEmpty()) {
-                                    trialMessage = msgNoDestinations
-                                    showTrialDialog = true
-                                } else {
-                                    showDestinationSelectDialog = true
+                                SpacerSmall()
+                                Button(onClick = {
+                                    if (originPoints.isEmpty()) {
+                                        trialMessage = msgNoOrigins
+                                        showTrialDialog = true
+                                    } else {
+                                        showOriginSelectDialog = true
+                                    }
+                                }, modifier = subButtonModifier) {
+                                    Text(stringResource(id = R.string.action_select_origin), fontSize = 11.sp)
                                 }
-                            }, modifier = sideButtonModifier) {
-                                Text(actionSelectDestination, fontSize = 12.sp)
+                                SpacerSmall()
+                                Button(onClick = {
+                                    if (currentProject == null) {
+                                        trialMessage = msgSelectCase
+                                        showTrialDialog = true
+                                    } else if (destPoints.isEmpty()) {
+                                        trialMessage = msgNoDestinations
+                                        showTrialDialog = true
+                                    } else {
+                                        showDestinationSelectDialog = true
+                                    }
+                                }, modifier = subButtonModifier) {
+                                    Text(actionSelectDestination, fontSize = 11.sp)
+                                }
+                                SpacerSmall()
                             }
-                            SpacerSmall()
-                            Button(onClick = {
-                                addPointName = ""
-                                addPointType = continuousAddType
-                                addPointProjectId = currentProject?.id
-                                addPointUseNewProject = false
-                                addPointNewProjectName = ""
-                                showAddPointDialog = true
-                            }, modifier = sideButtonModifier) {
-                                Text(stringResource(id = R.string.action_add_point), fontSize = 12.sp)
-                            }
-                            SpacerSmall()
-                            Button(onClick = { continuousAddMode = !continuousAddMode }, modifier = sideButtonModifier) {
-                                Text(
-                                    if (continuousAddMode) actionContinuousAddModeOn else actionContinuousAddModeOff,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            SpacerSmall()
-                            Button(
-                                onClick = {
-                                    continuousAddType = if (continuousAddType == PointType.ORIGIN) PointType.DESTINATION else PointType.ORIGIN
-                                },
-                                modifier = sideButtonModifier
-                            ) {
-                                Text(actionContinuousCurrentType, fontSize = 12.sp)
+
+                            SidebarSubSectionHeader(
+                                title = stringResource(id = R.string.subsection_case_edit),
+                                expanded = subCaseEditExpanded,
+                                onToggle = { subCaseEditExpanded = !subCaseEditExpanded },
+                                modifier = subHeaderModifier
+                            )
+                            if (subCaseEditExpanded) {
+                                Button(onClick = {
+                                    addPointName = ""
+                                    addPointType = continuousAddType
+                                    addPointProjectId = currentProject?.id
+                                    addPointUseNewProject = false
+                                    addPointNewProjectName = ""
+                                    showAddPointDialog = true
+                                }, modifier = subButtonModifier) {
+                                    Text(stringResource(id = R.string.action_add_point), fontSize = 11.sp)
+                                }
+                                SpacerSmall()
+                                Button(onClick = { continuousAddMode = !continuousAddMode }, modifier = subButtonModifier) {
+                                    Text(
+                                        if (continuousAddMode) actionContinuousAddModeOn else actionContinuousAddModeOff,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                SpacerSmall()
+                                Button(
+                                    onClick = {
+                                        continuousAddType = if (continuousAddType == PointType.ORIGIN) PointType.DESTINATION else PointType.ORIGIN
+                                    },
+                                    modifier = subButtonModifier
+                                ) {
+                                    Text(actionContinuousCurrentType, fontSize = 10.sp)
+                                }
+                                SpacerSmall()
                             }
                             SpacerSmall()
                         }
@@ -1171,49 +1258,59 @@ fun MapScreen(
                         SidebarSectionHeader(
                             title = sectionAnalysis,
                             expanded = sectionAnalysisExpanded,
-                            onToggle = { sectionAnalysisExpanded = !sectionAnalysisExpanded }
+                            onToggle = { sectionAnalysisExpanded = !sectionAnalysisExpanded },
+                            modifier = sectionButtonModifier
                         )
                         if (sectionAnalysisExpanded) {
-                            Button(onClick = {
-                                if (originPoints.size < 3) {
-                                    trialMessage = msgNeedThreeOrigins
-                                    showTrialDialog = true
-                                    return@Button
-                                }
-                                lifeCircleHomeId = null
-                                lifeCircleWorkId = null
-                                lifeCircleWizardStep = 1
-                            }, modifier = sideButtonModifier) {
-                                Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 12.sp)
-                            }
-                            SpacerSmall()
-                            Button(onClick = { ui.showSectorConfigDialog = true }, modifier = sideButtonModifier) {
-                                Text(stringResource(id = R.string.action_sector_search), fontSize = 11.sp)
-                            }
-                            if (originPoint != null && destPoint != null) {
-                                SpacerSmall()
+                            SidebarSubSectionHeader(
+                                title = stringResource(id = R.string.subsection_analysis_core),
+                                expanded = subAnalysisCoreExpanded,
+                                onToggle = { subAnalysisCoreExpanded = !subAnalysisCoreExpanded },
+                                modifier = subHeaderModifier
+                            )
+                            if (subAnalysisCoreExpanded) {
                                 Button(onClick = {
-                                    val bearing = RhumbLineUtils.calculateRhumbBearing(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
-                                    val shan = RhumbLineUtils.getShanName(bearing)
-                                    val bagua = RhumbLineUtils.getBaGua(bearing)
-                                    val wuxing = RhumbLineUtils.getWuXing(bearing)
-                                    val dist = RhumbLineUtils.haversineDistanceMeters(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
-                                    lineInfoText = context.getString(
-                                        R.string.line_info_text,
-                                        originPoint!!.name,
-                                        destPoint!!.name,
-                                        originPoint!!.latitude,
-                                        originPoint!!.longitude,
-                                        destPoint!!.latitude,
-                                        destPoint!!.longitude,
-                                        bearing,
-                                        shan,
-                                        bagua,
-                                        wuxing,
-                                        dist
-                                    )
-                                    showLineInfo = true
-                                }, modifier = sideButtonModifier) { Text(stringResource(id = R.string.action_show_line_info)) }
+                                    if (originPoints.size < 3) {
+                                        trialMessage = msgNeedThreeOrigins
+                                        showTrialDialog = true
+                                        return@Button
+                                    }
+                                    lifeCircleHomeId = null
+                                    lifeCircleWorkId = null
+                                    lifeCircleWizardStep = 1
+                                }, modifier = subButtonModifier) {
+                                    Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 10.sp)
+                                }
+                                SpacerSmall()
+                                Button(onClick = { ui.showSectorConfigDialog = true }, modifier = subButtonModifier) {
+                                    Text(stringResource(id = R.string.action_sector_search), fontSize = 10.sp)
+                                }
+                                if (originPoint != null && destPoint != null) {
+                                    SpacerSmall()
+                                    Button(onClick = {
+                                        val bearing = RhumbLineUtils.calculateRhumbBearing(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
+                                        val shan = RhumbLineUtils.getShanName(bearing)
+                                        val bagua = RhumbLineUtils.getBaGua(bearing)
+                                        val wuxing = RhumbLineUtils.getWuXing(bearing)
+                                        val dist = RhumbLineUtils.haversineDistanceMeters(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
+                                        lineInfoText = context.getString(
+                                            R.string.line_info_text,
+                                            originPoint!!.name,
+                                            destPoint!!.name,
+                                            originPoint!!.latitude,
+                                            originPoint!!.longitude,
+                                            destPoint!!.latitude,
+                                            destPoint!!.longitude,
+                                            bearing,
+                                            shan,
+                                            bagua,
+                                            wuxing,
+                                            dist
+                                        )
+                                        showLineInfo = true
+                                    }, modifier = subButtonModifier) { Text(stringResource(id = R.string.action_show_line_info), fontSize = 10.sp) }
+                                }
+                                SpacerSmall()
                             }
                         }
                     }
@@ -1760,6 +1857,7 @@ fun MapScreen(
                                                         groupName = currentProject!!.name
                                                     )
                                                     destPoints.add(p)
+                                                    selectedDestinationIds.clear()
                                                     refreshLinesForDisplay()
                                                 } catch (e: Exception) {
                                                     trialMessage = e.message ?: msgAddDestinationFailed
@@ -1906,14 +2004,21 @@ fun MapScreen(
                                         groupName = project.name
                                     )
 
-                                    if (addPointType == PointType.ORIGIN) {
-                                        originPoints.add(p)
-                                        selectedOriginPoint = p
+                                    if (project.id != currentProject?.id) {
+                                        currentProject = project
                                         selectedDestinationIds.clear()
-                                        refreshLinesForDisplay()
+                                        loadProjectData(project)
                                     } else {
-                                        destPoints.add(p)
-                                        refreshLinesForDisplay()
+                                        if (addPointType == PointType.ORIGIN) {
+                                            originPoints.add(p)
+                                            selectedOriginPoint = p
+                                            selectedDestinationIds.clear()
+                                            refreshLinesForDisplay()
+                                        } else {
+                                            destPoints.add(p)
+                                            selectedDestinationIds.clear()
+                                            refreshLinesForDisplay()
+                                        }
                                     }
 
                                     compassLocked = false
@@ -2087,18 +2192,39 @@ private fun sectorSpanDegrees(start: Float, end: Float): Float {
 private fun SidebarSectionHeader(
     title: String,
     expanded: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Button(
         onClick = onToggle,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 40.dp),
+        modifier = modifier,
         shape = RoundedCornerShape(20.dp)
     ) {
         Text(
             text = if (expanded) "▼ $title" else "▶ $title",
             fontSize = 11.sp
+        )
+    }
+    SpacerSmall()
+}
+
+@Composable
+private fun SidebarSubSectionHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onToggle,
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD7CEEF))
+    ) {
+        Text(
+            text = if (expanded) "▼ $title" else "▶ $title",
+            fontSize = 10.sp,
+            color = Color(0xFF3F2E7A)
         )
     }
     SpacerSmall()

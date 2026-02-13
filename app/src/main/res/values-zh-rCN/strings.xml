@@ -168,6 +168,11 @@
     <string name="section_map_tools">地图工具</string>
     <string name="section_case_ops">案例操作</string>
     <string name="section_analysis">分析功能</string>
+    <string name="subsection_compass_tools">罗盘与定位</string>
+    <string name="subsection_map_layers">地图与图层</string>
+    <string name="subsection_case_select">案例与筛选</string>
+    <string name="subsection_case_edit">加点与录入</string>
+    <string name="subsection_analysis_core">核心分析</string>
     <string name="action_continuous_add_on">连续加点：开</string>
     <string name="action_continuous_add_off">连续加点：关</string>
     <string name="action_continuous_current_type">当前类型：%1$s</string>

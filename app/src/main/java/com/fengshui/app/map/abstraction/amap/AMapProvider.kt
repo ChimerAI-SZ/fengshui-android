@@ -27,8 +27,10 @@ class AMapProvider(
     private var mAMap: AMap? = aMap
     private val markers = mutableMapOf<String, com.amap.api.maps.model.Marker>()
     private val polylines = mutableMapOf<String, com.amap.api.maps.model.Polyline>()
+    private val polylineIdByRef = mutableMapOf<com.amap.api.maps.model.Polyline, String>()
     private var cameraMoveCallback: ((CameraPosition) -> Unit)? = null
     private var cameraChangeCallback: ((CameraPosition) -> Unit)? = null
+    private var polylineClickCallback: ((UniversalPolyline) -> Unit)? = null
     
     /**
      * 设置底层 AMap 对象（由 MapViewWrapper 在地图加载完成后调用）
@@ -36,6 +38,7 @@ class AMapProvider(
     fun setAMap(map: AMap) {
         mAMap = map
         registerCameraChangeListener()
+        registerPolylineClickListener()
     }
     
     /**
@@ -73,10 +76,12 @@ class AMapProvider(
             ))
             .width(width)
             .color(color)
+            .setDottedLine(false)
         
         val polyline = mAMap!!.addPolyline(polylineOptions)
         val polylineId = "am_poly_${System.currentTimeMillis()}_${start.latitude}"
         polylines[polylineId] = polyline
+        polylineIdByRef[polyline] = polylineId
         
         return UniversalPolyline(polylineId)
     }
@@ -206,6 +211,15 @@ class AMapProvider(
     fun clearPolylines() {
         polylines.values.forEach { it.remove() }
         polylines.clear()
+        polylineIdByRef.clear()
+    }
+
+    /**
+     * 注册折线点击监听
+     */
+    fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
+        polylineClickCallback = callback
+        registerPolylineClickListener()
     }
     
     /**
@@ -245,5 +259,23 @@ class AMapProvider(
                 }
             }
         })
+    }
+
+    /**
+     * 私有方法：注册折线点击监听
+     */
+    private fun registerPolylineClickListener() {
+        if (mAMap == null) return
+
+        if (polylineClickCallback != null) {
+            mAMap!!.setOnPolylineClickListener { polyline ->
+                val id = polylineIdByRef[polyline]
+                if (id != null) {
+                    polylineClickCallback?.invoke(UniversalPolyline(id))
+                }
+            }
+        } else {
+            mAMap!!.setOnPolylineClickListener(null)
+        }
     }
 }
