@@ -44,8 +44,14 @@
     <string name="action_exit">Exit</string>
     <string name="action_expand_collapse">Expand/Collapse</string>
     <string name="action_start_search">Start search</string>
+    <string name="action_draw_region">Draw region</string>
+    <string name="action_draw_and_search">Draw + search</string>
+    <string name="action_clear_and_draw">Clear + draw</string>
+    <string name="action_clear_draw_and_search">Clear + draw + search</string>
+    <string name="action_clear_region">Clear region</string>
     <string name="action_cancel_new_case">Cancel new case</string>
     <string name="action_create_new_case">New case</string>
+    <string name="action_create_case_and_save">Create case and save</string>
 
     <string name="crosshair_current_case">Current case: %1$s</string>
     <string name="crosshair_search_title">Search location</string>
@@ -94,7 +100,9 @@
     <string name="label_wuxing">Wuxing</string>
     <string name="label_distance">Distance</string>
     <string name="label_keyword">Keyword</string>
-    <string name="label_distance_range">Distance (m, 100-250000)</string>
+    <string name="label_distance_range">Distance</string>
+    <string name="unit_meters">m</string>
+    <string name="unit_kilometers">km</string>
     <string name="label_coordinates">Lat: %1$.4f, Lng: %2$.4f</string>
 
     <string name="point_list_title">Points (%1$d)</string>
@@ -140,6 +148,18 @@
     <string name="sector_search_loading">Searching...</string>
     <string name="sector_no_results">No matching results</string>
     <string name="sector_notice">Showing first %1$d results</string>
+    <string name="sector_keyword_hint">Leave blank to draw region only</string>
+    <string name="sector_distance_hint">Distance range: 100m to 5000km</string>
+    <string name="sector_invalid_distance">Enter a valid number</string>
+    <string name="sector_min_distance_error">Minimum distance is 100m</string>
+    <string name="sector_max_distance_error">Maximum distance is 5000km (Mercator limit)</string>
+    <string name="sector_keyword_residence">Residence</string>
+    <string name="sector_keyword_hospital">Hospital</string>
+    <string name="sector_keyword_tower">Tower</string>
+    <string name="sector_draw_only_notice">Sector region drawn (keyword is empty).</string>
+    <string name="sector_poi_radius_limited_notice">POI search is limited to 250km.</string>
+    <string name="sector_search_failed">Sector search failed</string>
+    <string name="sector_origin_map_center_notice">No origin selected. Using map center as sector origin.</string>
 
     <string name="select_origin_title">Select origin</string>
     <string name="select_destination_title">Select destination</string>
@@ -160,6 +180,7 @@
     <string name="provider_google_map_short">Google</string>
     <string name="provider_amap">Amap</string>
     <string name="provider_amap_short">Amap</string>
+    <string name="provider_openstreetmap">OpenStreetMap</string>
     <string name="provider_mock">Mock</string>
 
     <string name="info_title">App info</string>

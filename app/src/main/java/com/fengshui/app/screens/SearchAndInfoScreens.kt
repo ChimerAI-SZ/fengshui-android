@@ -41,12 +41,14 @@ import com.fengshui.app.map.poi.MapPoiProvider
 import com.fengshui.app.map.poi.PoiResult
 import com.fengshui.app.map.poi.AmapPoiProvider
 import com.fengshui.app.map.poi.GooglePlacesProvider
+import com.fengshui.app.map.poi.NominatimPoiProvider
 import com.fengshui.app.data.PointRepository
 import com.fengshui.app.data.PointType
 import com.fengshui.app.utils.ApiKeyConfig
 import com.fengshui.app.map.ui.RegistrationDialog
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
+import java.util.Locale
 
 /**
  * SearchScreen - 地址搜索界面
@@ -70,6 +72,8 @@ fun SearchScreen(
     var results by remember { mutableStateOf(listOf<PoiResult>()) }
     var showCaseSelectDialog by remember { mutableStateOf(false) }
     var selectedPoi by remember { mutableStateOf<PoiResult?>(null) }
+    var savePointType by remember { mutableStateOf(PointType.DESTINATION) }
+    var createNewCaseName by remember { mutableStateOf("") }
     var showTrialDialog by remember { mutableStateOf(false) }
     var showRegistrationDialog by remember { mutableStateOf(false) }
     var trialMessage by remember { mutableStateOf("") }
@@ -80,24 +84,55 @@ fun SearchScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val repo = remember { PointRepository(context) }
     
-    // Phase 4: 动态选择 POI 提供者
-    // 优先级：Google Maps > Amap > Mock（开发模式）
-    val provider: MapPoiProvider = remember {
+    val providerGoogle: MapPoiProvider? = remember {
         val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
-        val amapKey = ApiKeyConfig.getAmapApiKey(context)
-        
-        when {
-            ApiKeyConfig.isValidKey(googleKey) -> GooglePlacesProvider(googleKey!!)
-            ApiKeyConfig.isValidKey(amapKey) -> AmapPoiProvider(amapKey!!)
-            else -> MockPoiProvider() // 开发模式（如果没有配置 API Key）
-        }
+        if (ApiKeyConfig.isValidKey(googleKey)) GooglePlacesProvider(googleKey!!) else null
     }
-    val providerName = when (provider) {
-        is GooglePlacesProvider -> stringResource(id = R.string.provider_google_places)
-        is AmapPoiProvider -> stringResource(id = R.string.provider_amap)
-        else -> stringResource(id = R.string.provider_mock)
+    val providerAmap: MapPoiProvider? = remember {
+        val amapKey = ApiKeyConfig.getAmapApiKey(context)
+        if (ApiKeyConfig.isValidKey(amapKey)) AmapPoiProvider(amapKey!!) else null
+    }
+    val providerFallback: MapPoiProvider = remember { NominatimPoiProvider() }
+    val providerMock: MapPoiProvider = remember { MockPoiProvider() }
+    val isChinaLocale = remember { Locale.getDefault().country.equals("CN", ignoreCase = true) }
+    var providerName by remember {
+        mutableStateOf(
+            if (isChinaLocale && providerAmap != null) {
+                context.getString(R.string.provider_amap)
+            } else if (providerGoogle != null) {
+                context.getString(R.string.provider_google_places)
+            } else {
+                context.getString(R.string.provider_openstreetmap)
+            }
+        )
     }
     val scope = rememberCoroutineScope()
+
+    suspend fun runSearch(query: String): List<PoiResult> {
+        val hasChineseChars = query.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
+        val providers = buildList<Pair<String, MapPoiProvider>> {
+            if ((isChinaLocale || hasChineseChars) && providerAmap != null) {
+                add(context.getString(R.string.provider_amap) to providerAmap)
+            }
+            if (providerGoogle != null) {
+                add(context.getString(R.string.provider_google_places) to providerGoogle)
+            }
+            if (providerAmap != null && !(isChinaLocale || hasChineseChars)) {
+                add(context.getString(R.string.provider_amap) to providerAmap)
+            }
+            add(context.getString(R.string.provider_openstreetmap) to providerFallback)
+            add(context.getString(R.string.provider_mock) to providerMock)
+        }
+
+        providers.forEach { (name, provider) ->
+            val list = provider.searchByKeyword(query.trim())
+            if (list.isNotEmpty()) {
+                providerName = name
+                return list
+            }
+        }
+        return emptyList()
+    }
 
     LaunchedEffect(searchQuery) {
         if (searchQuery.isBlank()) {
@@ -107,7 +142,7 @@ fun SearchScreen(
         }
         loading = true
         delay(350)
-        results = provider.searchByKeyword(searchQuery.trim())
+        results = runSearch(searchQuery)
         loading = false
     }
 
@@ -150,7 +185,7 @@ fun SearchScreen(
                     if (searchQuery.isNotBlank()) {
                         loading = true
                         scope.launch {
-                            results = provider.searchByKeyword(searchQuery.trim())
+                            results = runSearch(searchQuery)
                             loading = false
                         }
                     }
@@ -234,6 +269,8 @@ fun SearchScreen(
                                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(6.dp))
                                 Button(onClick = {
                                     selectedPoi = poi
+                                    savePointType = PointType.DESTINATION
+                                    createNewCaseName = ""
                                     showCaseSelectDialog = true
                                 }) {
                                     Text(stringResource(id = R.string.action_add_to_case))
@@ -252,6 +289,68 @@ fun SearchScreen(
                     title = { Text(stringResource(id = R.string.select_case_title)) },
                     text = {
                         Column {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Button(onClick = { savePointType = PointType.ORIGIN }) {
+                                    Text(
+                                        if (savePointType == PointType.ORIGIN) {
+                                            stringResource(id = R.string.point_type_origin_checked)
+                                        } else {
+                                            stringResource(id = R.string.point_type_origin)
+                                        }
+                                    )
+                                }
+                                androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(8.dp))
+                                Button(onClick = { savePointType = PointType.DESTINATION }) {
+                                    Text(
+                                        if (savePointType == PointType.DESTINATION) {
+                                            stringResource(id = R.string.point_type_destination_checked)
+                                        } else {
+                                            stringResource(id = R.string.point_type_destination)
+                                        }
+                                    )
+                                }
+                            }
+
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(8.dp))
+                            TextField(
+                                value = createNewCaseName,
+                                onValueChange = { createNewCaseName = it },
+                                label = { Text(stringResource(id = R.string.label_new_case_name)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(6.dp))
+                            Button(
+                                onClick = {
+                                    if (createNewCaseName.isBlank()) return@Button
+                                    scope.launch {
+                                        try {
+                                            val newProject = repo.createProject(createNewCaseName.trim())
+                                            repo.createPoint(
+                                                selectedPoi!!.name,
+                                                selectedPoi!!.lat,
+                                                selectedPoi!!.lng,
+                                                savePointType,
+                                                groupId = newProject.id,
+                                                groupName = newProject.name,
+                                                address = selectedPoi!!.address
+                                            )
+                                            showCaseSelectDialog = false
+                                            selectedPoi = null
+                                        } catch (e: com.fengshui.app.TrialLimitException) {
+                                            trialMessage = e.message ?: trialLimitMessage
+                                            showCaseSelectDialog = false
+                                            selectedPoi = null
+                                            showTrialDialog = true
+                                        }
+                                    }
+                                },
+                                enabled = createNewCaseName.isNotBlank()
+                            ) {
+                                Text(stringResource(id = R.string.action_create_case_and_save))
+                            }
+
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(10.dp))
                             if (projects.isEmpty()) {
                                 Text(stringResource(id = R.string.case_select_empty))
                             } else {
@@ -268,8 +367,9 @@ fun SearchScreen(
                                                         selectedPoi!!.name,
                                                         selectedPoi!!.lat,
                                                         selectedPoi!!.lng,
-                                                        PointType.DESTINATION,
+                                                        savePointType,
                                                         groupId = p.id,
+                                                        groupName = p.name,
                                                         address = selectedPoi!!.address
                                                     )
                                                     showCaseSelectDialog = false

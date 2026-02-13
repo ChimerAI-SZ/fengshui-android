@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -79,6 +80,7 @@ import com.fengshui.app.map.ui.RoleAssignmentDialog
 import com.fengshui.app.map.ui.LifeCircleBanner
 import com.fengshui.app.map.ui.LifeCircleLabelPanel
 import com.fengshui.app.map.ui.SectorConfigDialog
+import com.fengshui.app.map.ui.SectorConfig
 import com.fengshui.app.map.ui.RegistrationDialog
 import com.fengshui.app.map.ui.AmapMapViewWrapper
 import com.fengshui.app.map.GoogleMapView
@@ -88,7 +90,9 @@ import com.fengshui.app.map.poi.PoiResult
 import com.fengshui.app.map.poi.AmapPoiProvider
 import com.fengshui.app.map.poi.GooglePlacesProvider
 import com.fengshui.app.map.poi.MockPoiProvider
+import com.fengshui.app.map.poi.NominatimPoiProvider
 import com.fengshui.app.map.abstraction.amap.AMapProvider
+import java.util.Locale
 
 /**
  * 简易 MapScreen 示例：
@@ -132,13 +136,34 @@ fun MapScreen(
     // repository
     val repo = remember { PointRepository(context) }
 
-    val poiProvider: MapPoiProvider = remember {
+    val googlePoiProvider: MapPoiProvider? = remember {
         val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
+        if (ApiKeyConfig.isValidKey(googleKey)) GooglePlacesProvider(googleKey!!) else null
+    }
+    val amapPoiProvider: MapPoiProvider? = remember {
         val amapKey = ApiKeyConfig.getAmapApiKey(context)
-        when {
-            ApiKeyConfig.isValidKey(googleKey) -> GooglePlacesProvider(googleKey!!)
-            ApiKeyConfig.isValidKey(amapKey) -> AmapPoiProvider(amapKey!!)
-            else -> MockPoiProvider()
+        if (ApiKeyConfig.isValidKey(amapKey)) AmapPoiProvider(amapKey!!) else null
+    }
+    val nominatimPoiProvider: MapPoiProvider = remember { NominatimPoiProvider() }
+    val mockPoiProvider: MapPoiProvider = remember { MockPoiProvider() }
+    val isChinaLocale = remember { Locale.getDefault().country.equals("CN", ignoreCase = true) }
+
+    fun buildPoiProviderChain(keyword: String): List<MapPoiProvider> {
+        val hasChineseChars = keyword.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
+        return buildList {
+            if (mapProviderType == MapProviderType.AMAP || isChinaLocale || hasChineseChars) {
+                amapPoiProvider?.let { add(it) }
+            }
+            if (mapProviderType == MapProviderType.GOOGLE) {
+                googlePoiProvider?.let { add(it) }
+            } else {
+                googlePoiProvider?.let { add(it) }
+            }
+            if (mapProviderType != MapProviderType.AMAP && !isChinaLocale && !hasChineseChars) {
+                amapPoiProvider?.let { add(it) }
+            }
+            add(nominatimPoiProvider)
+            add(mockPoiProvider)
         }
     }
     
@@ -191,14 +216,16 @@ fun MapScreen(
     val msgGpsGetting = stringResource(id = R.string.gps_getting)
     val msgNoOrigins = stringResource(id = R.string.err_no_origin_points)
     val msgNeedThreeOrigins = stringResource(id = R.string.err_need_three_origins)
-    val msgSelectOriginFirst = stringResource(id = R.string.err_select_origin_first)
-    val msgEnterKeyword = stringResource(id = R.string.err_enter_keyword)
     val msgAddPointFailed = stringResource(id = R.string.err_add_point_failed)
     val msgRegisterSuccess = stringResource(id = R.string.register_success)
     val msgRegisterInvalid = stringResource(id = R.string.register_invalid)
     val msgSelectThreeOrigins = stringResource(id = R.string.err_select_three_origins)
     val msgEnterNewCaseName = stringResource(id = R.string.err_enter_new_case_name)
     val msgGoogleSatelliteFallback = stringResource(id = R.string.google_satellite_fallback_to_amap)
+    val msgSectorNoKeywordDrawOnly = stringResource(id = R.string.sector_draw_only_notice)
+    val msgSectorRadiusLimited = stringResource(id = R.string.sector_poi_radius_limited_notice)
+    val msgSectorSearchFailed = stringResource(id = R.string.sector_search_failed)
+    val msgSectorFromMapCenter = stringResource(id = R.string.sector_origin_map_center_notice)
     
     // 地图是否已初始化
     val mapReady = remember { mutableStateOf(false) }
@@ -497,6 +524,9 @@ fun MapScreen(
                     )
                 )
             }
+            if (ui.sectorOverlayVisible && ui.sectorUseMapCenterOrigin) {
+                ui.sectorRenderTick += 1
+            }
         }
         
         onDispose {
@@ -589,8 +619,70 @@ fun MapScreen(
             Canvas(modifier = Modifier
                 .fillMaxSize()
                 .zIndex(0.5f)) {
-                // 在这里绘制连线（需要将经纬度转换为屏幕坐标）
-                // 暂时在GoogleMapProvider中处理，这里保留备用
+                if (ui.sectorOverlayVisible) {
+                    val renderTick = ui.sectorRenderTick
+                    if (renderTick >= 0) {
+                        // no-op: just subscribe state for recomposition
+                    }
+                    val config = ui.lastSectorConfig
+                    val origin = if (ui.sectorUseMapCenterOrigin) {
+                        mapProvider.getCameraPosition()?.target
+                    } else {
+                        ui.sectorOrigin
+                    }
+                    if (config != null && origin != null) {
+                        val startPoint = RhumbLineUtils.calculateRhumbDestination(
+                            start = origin,
+                            bearing = config.startAngle,
+                            distanceMeters = config.maxDistanceMeters
+                        )
+                        val endPoint = RhumbLineUtils.calculateRhumbDestination(
+                            start = origin,
+                            bearing = config.endAngle,
+                            distanceMeters = config.maxDistanceMeters
+                        )
+                        val centerScreen = mapProvider.latLngToScreenLocation(origin)
+                        val startScreen = mapProvider.latLngToScreenLocation(startPoint)
+                        val endScreen = mapProvider.latLngToScreenLocation(endPoint)
+
+                        val dashed = PathEffect.dashPathEffect(floatArrayOf(14f, 10f), 0f)
+                        drawLine(
+                            color = Color(0xFF6A4FB5),
+                            start = Offset(centerScreen.x, centerScreen.y),
+                            end = Offset(startScreen.x, startScreen.y),
+                            strokeWidth = 4f,
+                            pathEffect = dashed
+                        )
+                        drawLine(
+                            color = Color(0xFF6A4FB5),
+                            start = Offset(centerScreen.x, centerScreen.y),
+                            end = Offset(endScreen.x, endScreen.y),
+                            strokeWidth = 4f,
+                            pathEffect = dashed
+                        )
+
+                        val span = sectorSpanDegrees(config.startAngle, config.endAngle)
+                        val stepCount = 24
+                        var prev = startPoint
+                        for (index in 1..stepCount) {
+                            val angle = (config.startAngle + span * (index.toFloat() / stepCount.toFloat())) % 360f
+                            val curr = RhumbLineUtils.calculateRhumbDestination(
+                                start = origin,
+                                bearing = angle,
+                                distanceMeters = config.maxDistanceMeters
+                            )
+                            val prevScreen = mapProvider.latLngToScreenLocation(prev)
+                            val currScreen = mapProvider.latLngToScreenLocation(curr)
+                            drawLine(
+                                color = Color(0x996A4FB5),
+                                start = Offset(prevScreen.x, prevScreen.y),
+                                end = Offset(currScreen.x, currScreen.y),
+                                strokeWidth = 3f
+                            )
+                            prev = curr
+                        }
+                    }
+                }
             }
 
             // 连线点击由地图 SDK 回调处理
@@ -925,11 +1017,6 @@ fun MapScreen(
                         SpacerSmall()
 
                         Button(onClick = {
-                            if (selectedOriginPoint == null && originPoints.isEmpty()) {
-                                trialMessage = msgSelectOriginFirst
-                                showTrialDialog = true
-                                return@Button
-                            }
                             ui.showSectorConfigDialog = true
                         }) {
                             Text(stringResource(id = R.string.action_sector_search), fontSize = 11.sp)
@@ -1167,31 +1254,75 @@ fun MapScreen(
 
             if (ui.showSectorConfigDialog) {
                 SectorConfigDialog(
-                    onConfirm = { config ->
+                    initialConfig = ui.lastSectorConfig,
+                    hasExistingSector = ui.sectorOverlayVisible,
+                    onConfirm = { config, clearBeforeDraw ->
                         ui.showSectorConfigDialog = false
-                        val origin = selectedOriginPoint ?: originPoints.firstOrNull()
-                        if (origin == null) {
-                            trialMessage = msgSelectOriginFirst
-                            showTrialDialog = true
-                            return@SectorConfigDialog
+                        if (clearBeforeDraw) {
+                            ui.sectorOverlayVisible = false
+                            ui.sectorResults.clear()
+                            ui.showSectorResultDialog = false
+                            showPoiMarkers(emptyList())
                         }
-                        if (config.keyword.isBlank()) {
-                            trialMessage = msgEnterKeyword
+
+                        val originFromCase = selectedOriginPoint ?: originPoints.firstOrNull()
+                        val usingMapCenter = originFromCase == null
+                        val originLatLng = if (usingMapCenter) {
+                            mapProvider.getCameraPosition()?.target
+                        } else {
+                            UniversalLatLng(originFromCase!!.latitude, originFromCase.longitude)
+                        }
+                        if (originLatLng == null) {
+                            trialMessage = msgNoLocation
                             showTrialDialog = true
                             return@SectorConfigDialog
                         }
 
-                        ui.sectorOrigin = UniversalLatLng(origin.latitude, origin.longitude)
+                        ui.sectorOrigin = originLatLng
+                        ui.sectorUseMapCenterOrigin = usingMapCenter
+                        ui.lastSectorConfig = config
                         ui.sectorConfigLabel = config.label
-                        ui.sectorLoading = true
-                        viewModel.runSectorSearch(
-                            provider = poiProvider,
-                            origin = ui.sectorOrigin!!,
-                            config = config,
-                            onResult = { results ->
-                                showPoiMarkers(results)
-                            }
-                        )
+                        ui.sectorOverlayVisible = true
+                        ui.sectorRenderTick += 1
+
+                        if (usingMapCenter) {
+                            trialMessage = msgSectorFromMapCenter
+                            showTrialDialog = true
+                        }
+
+                        if (config.keyword.isBlank()) {
+                            ui.sectorLoading = false
+                            ui.sectorResults.clear()
+                            ui.sectorNoticeCount = null
+                            showPoiMarkers(emptyList())
+                            trialMessage = msgSectorNoKeywordDrawOnly
+                            showTrialDialog = true
+                        } else {
+                            ui.sectorLoading = true
+                            viewModel.runSectorSearch(
+                                providers = buildPoiProviderChain(config.keyword),
+                                origin = ui.sectorOrigin!!,
+                                config = config,
+                                onResult = { results ->
+                                    showPoiMarkers(results)
+                                    if (ui.sectorRadiusLimited) {
+                                        trialMessage = msgSectorRadiusLimited
+                                        showTrialDialog = true
+                                    }
+                                },
+                                onError = {
+                                    trialMessage = "${msgSectorSearchFailed}: ${it.message ?: "unknown"}"
+                                    showTrialDialog = true
+                                }
+                            )
+                        }
+                    },
+                    onClearSector = {
+                        ui.showSectorConfigDialog = false
+                        ui.sectorOverlayVisible = false
+                        ui.sectorResults.clear()
+                        ui.showSectorResultDialog = false
+                        showPoiMarkers(emptyList())
                     },
                     onDismiss = { ui.showSectorConfigDialog = false }
                 )
@@ -1210,6 +1341,13 @@ fun MapScreen(
                             } else if (ui.sectorResults.isEmpty()) {
                                 Text(stringResource(id = R.string.sector_no_results))
                             } else {
+                                if (ui.sectorRadiusLimited) {
+                                    Text(
+                                        stringResource(id = R.string.sector_poi_radius_limited_notice),
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
+                                }
                                 ui.sectorNoticeCount?.let { count ->
                                     Text(
                                         stringResource(id = R.string.sector_notice, count),
@@ -1514,6 +1652,14 @@ fun MapScreen(
 
 // 扩展函数：格式化Double
 private fun Double.format(digits: Int) = "%.${digits}f".format(this)
+
+private fun sectorSpanDegrees(start: Float, end: Float): Float {
+    return if (end >= start) {
+        end - start
+    } else {
+        (360f - start) + end
+    }
+}
 
 @Composable
 private fun SpacerSmall() {

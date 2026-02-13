@@ -44,8 +44,14 @@
     <string name="action_exit">退出</string>
     <string name="action_expand_collapse">展开/收起</string>
     <string name="action_start_search">开始搜索</string>
+    <string name="action_draw_region">绘制区域</string>
+    <string name="action_draw_and_search">绘制并搜索</string>
+    <string name="action_clear_and_draw">清除并绘制</string>
+    <string name="action_clear_draw_and_search">清除并绘制搜索</string>
+    <string name="action_clear_region">清除区域</string>
     <string name="action_cancel_new_case">取消新建案例</string>
     <string name="action_create_new_case">新建案例</string>
+    <string name="action_create_case_and_save">新建案例并保存</string>
 
     <string name="crosshair_current_case">当前案例: %1$s</string>
     <string name="crosshair_search_title">搜索位置</string>
@@ -94,7 +100,9 @@
     <string name="label_wuxing">五行</string>
     <string name="label_distance">直线距离</string>
     <string name="label_keyword">关键词</string>
-    <string name="label_distance_range">距离(米，100-250000)</string>
+    <string name="label_distance_range">距离</string>
+    <string name="unit_meters">米</string>
+    <string name="unit_kilometers">千米</string>
     <string name="label_coordinates">纬: %1$.4f, 经: %2$.4f</string>
 
     <string name="point_list_title">点位列表 (%1$d)</string>
@@ -140,6 +148,18 @@
     <string name="sector_search_loading">搜索中...</string>
     <string name="sector_no_results">没有符合条件的结果</string>
     <string name="sector_notice">已显示前 %1$d 个结果</string>
+    <string name="sector_keyword_hint">不填关键词时只绘制扇形区域</string>
+    <string name="sector_distance_hint">距离范围：100米 到 5000千米</string>
+    <string name="sector_invalid_distance">请输入有效数字</string>
+    <string name="sector_min_distance_error">最小距离100米</string>
+    <string name="sector_max_distance_error">最大距离5000千米（Mercator限制）</string>
+    <string name="sector_keyword_residence">住宅</string>
+    <string name="sector_keyword_hospital">医院</string>
+    <string name="sector_keyword_tower">大厦</string>
+    <string name="sector_draw_only_notice">关键词为空，已仅绘制扇形区域。</string>
+    <string name="sector_poi_radius_limited_notice">POI 搜索范围已限制在 250km 内。</string>
+    <string name="sector_search_failed">扇形搜索失败</string>
+    <string name="sector_origin_map_center_notice">未选择原点，已使用地图中心作为扇形起点。</string>
 
     <string name="select_origin_title">选择原点</string>
     <string name="select_destination_title">选择终点</string>
@@ -160,6 +180,7 @@
     <string name="provider_google_map_short">谷歌</string>
     <string name="provider_amap">高德地图</string>
     <string name="provider_amap_short">高德</string>
+    <string name="provider_openstreetmap">OpenStreetMap</string>
     <string name="provider_mock">Mock</string>
 
     <string name="info_title">应用说明</string>

@@ -108,37 +108,53 @@ class MapUiStateViewModel : ViewModel() {
     }
 
     fun runSectorSearch(
-        provider: MapPoiProvider,
+        providers: List<MapPoiProvider>,
         origin: UniversalLatLng,
         config: SectorConfig,
-        onResult: (List<PoiResult>) -> Unit
+        onResult: (List<PoiResult>) -> Unit,
+        onError: (Throwable) -> Unit = {}
     ) {
         ui.sectorOrigin = origin
         ui.sectorConfigLabel = config.label
         ui.sectorLoading = true
+        ui.sectorRadiusLimited = false
 
         viewModelScope.launch {
-            val raw = provider.searchByKeyword(
-                keyword = config.keyword,
-                location = origin,
-                radiusMeters = config.maxDistanceMeters.toInt()
-            )
-            val filtered = SectorUtils.filterPOIsInSector(
-                origin = origin,
-                pois = raw,
-                startAngle = config.startAngle,
-                endAngle = config.endAngle,
-                maxDistanceMeters = config.maxDistanceMeters
-            )
-            val maxPoiCount = 50
-            val trimmed = filtered.take(maxPoiCount)
+            try {
+                val searchRadius = config.maxDistanceMeters.toInt().coerceAtMost(250_000)
+                if (config.maxDistanceMeters > 250_000f) {
+                    ui.sectorRadiusLimited = true
+                }
 
-            ui.sectorResults.clear()
-            ui.sectorResults.addAll(trimmed)
-            ui.sectorNoticeCount = if (filtered.size > maxPoiCount) maxPoiCount else null
-            ui.sectorLoading = false
-            ui.showSectorResultDialog = true
-            onResult(trimmed)
+                var raw: List<PoiResult> = emptyList()
+                for (provider in providers) {
+                    raw = provider.searchByKeyword(
+                        keyword = config.keyword,
+                        location = origin,
+                        radiusMeters = searchRadius
+                    )
+                    if (raw.isNotEmpty()) break
+                }
+                val filtered = SectorUtils.filterPOIsInSector(
+                    origin = origin,
+                    pois = raw,
+                    startAngle = config.startAngle,
+                    endAngle = config.endAngle,
+                    maxDistanceMeters = searchRadius.toFloat()
+                )
+                val maxPoiCount = 50
+                val trimmed = filtered.take(maxPoiCount)
+
+                ui.sectorResults.clear()
+                ui.sectorResults.addAll(trimmed)
+                ui.sectorNoticeCount = if (filtered.size > maxPoiCount) maxPoiCount else null
+                ui.sectorLoading = false
+                ui.showSectorResultDialog = true
+                onResult(trimmed)
+            } catch (t: Throwable) {
+                ui.sectorLoading = false
+                onError(t)
+            }
         }
     }
 }

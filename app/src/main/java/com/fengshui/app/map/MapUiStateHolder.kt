@@ -11,6 +11,7 @@ import com.fengshui.app.data.LifeCircleData
 import com.fengshui.app.data.LifeCirclePointType
 import com.fengshui.app.map.abstraction.UniversalLatLng
 import com.fengshui.app.map.poi.PoiResult
+import com.fengshui.app.map.ui.SectorConfig
 
 class MapUiStateHolder {
     var crosshairMode by mutableStateOf(false)
@@ -42,4 +43,9 @@ class MapUiStateHolder {
     var sectorOrigin by mutableStateOf<UniversalLatLng?>(null)
     var sectorConfigLabel by mutableStateOf("")
     var sectorNoticeCount by mutableStateOf<Int?>(null)
+    var sectorRadiusLimited by mutableStateOf(false)
+    var sectorOverlayVisible by mutableStateOf(false)
+    var sectorUseMapCenterOrigin by mutableStateOf(false)
+    var sectorRenderTick by mutableStateOf(0)
+    var lastSectorConfig by mutableStateOf<SectorConfig?>(null)
 }
