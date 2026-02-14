@@ -100,23 +100,45 @@ fun CompassOverlay(
                         radius = radius * 0.90f
                     )
 
-                    for (deg in 0 until 360 step 5) {
+                    // High-precision degree scale:
+                    // - 1deg minor ticks
+                    // - 5deg medium ticks
+                    // - 10deg major ticks
+                    for (deg in 0 until 360) {
                         val angle = Math.toRadians((deg - 90).toDouble())
                         val outerRadius = radius * 0.97f
-                        val innerRadius = if (deg % 10 == 0) radius * 0.87f else radius * 0.91f
+                        val innerRadius = when {
+                            deg % 10 == 0 -> radius * 0.845f
+                            deg % 5 == 0 -> radius * 0.885f
+                            else -> radius * 0.93f
+                        }
                         val x1 = centerX + (outerRadius * cos(angle)).toFloat()
                         val y1 = centerY + (outerRadius * sin(angle)).toFloat()
                         val x2 = centerX + (innerRadius * cos(angle)).toFloat()
                         val y2 = centerY + (innerRadius * sin(angle)).toFloat()
-                        val blackWidth = if (deg % 10 == 0) 1.45f else 0.75f
+                        val blackWidth = when {
+                            deg % 10 == 0 -> 1.5f
+                            deg % 5 == 0 -> 1.0f
+                            else -> 0.55f
+                        }
+                        val whiteBoost = when {
+                            deg % 10 == 0 -> 1.2f
+                            deg % 5 == 0 -> 0.9f
+                            else -> 0.55f
+                        }
+                        val blackAlpha = when {
+                            deg % 10 == 0 -> 1.0f
+                            deg % 5 == 0 -> 0.88f
+                            else -> 0.62f
+                        }
                         drawLine(
-                            color = Color.White.copy(alpha = if (deg % 10 == 0) 0.98f else 0.85f),
+                            color = Color.White.copy(alpha = if (deg % 10 == 0) 0.98f else 0.82f),
                             start = Offset(x1, y1),
                             end = Offset(x2, y2),
-                            strokeWidth = blackWidth + if (deg % 10 == 0) 1.2f else 0.7f
+                            strokeWidth = blackWidth + whiteBoost
                         )
                         drawLine(
-                            color = Color.Black.copy(alpha = if (deg % 10 == 0) 1.0f else 0.78f),
+                            color = Color.Black.copy(alpha = blackAlpha),
                             start = Offset(x1, y1),
                             end = Offset(x2, y2),
                             strokeWidth = blackWidth
@@ -139,8 +161,8 @@ fun CompassOverlay(
                         isAntiAlias = true
                         isFakeBoldText = true
                     }
-                    val labelRadius = radius * 0.90f
-                    for (deg in 0 until 360 step 20) {
+                    val labelRadius = radius * 0.80f
+                    for (deg in 0 until 360 step 10) {
                         val angle = Math.toRadians((deg - 90).toDouble())
                         val tx = centerX + (labelRadius * cos(angle)).toFloat()
                         val ty = centerY + (labelRadius * sin(angle)).toFloat()

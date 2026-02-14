@@ -29,8 +29,8 @@ android {
         applicationId "com.fengshui.app"
         minSdk 24
         targetSdk 34
-        versionCode 810
-        versionName "0.8.10"
+        versionCode 811
+        versionName "0.8.11"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
