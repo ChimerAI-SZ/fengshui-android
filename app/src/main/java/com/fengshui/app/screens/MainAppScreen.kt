@@ -96,17 +96,22 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         MapProviderType.GOOGLE -> googleMapProvider
     }
     val initialLocales = AppCompatDelegate.getApplicationLocales()
-    var isChinese by remember {
-        mutableStateOf(
-            if (initialLocales.isEmpty) {
-                Locale.getDefault().language.startsWith("zh")
-            } else {
-                initialLocales[0]?.language?.startsWith("zh") == true
-            }
-        )
-    }
+    var isChinese by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
+        // Default language on app open: Chinese.
+        val alreadyChinese = if (initialLocales.isEmpty) {
+            Locale.getDefault().language.startsWith("zh")
+        } else {
+            initialLocales[0]?.language?.startsWith("zh") == true
+        }
+        if (!alreadyChinese) {
+            AppCompatDelegate.setApplicationLocales(
+                LocaleListCompat.forLanguageTags("zh-CN")
+            )
+        }
+        isChinese = true
+
         val pending = Prefs.getString(context, PREF_PENDING_MAP_SWITCH).orEmpty()
         if (pending.isNotBlank()) {
             runCatching { MapProviderType.valueOf(pending) }

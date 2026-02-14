@@ -164,8 +164,9 @@ fun CompassOverlay(
 
                     for (i in 0 until 24) {
                         val angle = Math.toRadians(((i * 15) - 90).toDouble())
-                        val x1 = centerX + (radius * 0.57f * cos(angle)).toFloat()
-                        val y1 = centerY + (radius * 0.57f * sin(angle)).toFloat()
+                        // Radial lines pass through center (from center ring to outer ring).
+                        val x1 = centerX + (holeRadius * 1.02f * cos(angle)).toFloat()
+                        val y1 = centerY + (holeRadius * 1.02f * sin(angle)).toFloat()
                         val x2 = centerX + (radius * 0.79f * cos(angle)).toFloat()
                         val y2 = centerY + (radius * 0.79f * sin(angle)).toFloat()
                         drawLine(

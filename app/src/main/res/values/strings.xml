@@ -62,6 +62,10 @@
     <string name="continuous_add_map_move_hint">Drag the map to move crosshair, then save next point.</string>
     <string name="action_switch_point_type">Switch type</string>
     <string name="action_previous_step">Previous</string>
+    <string name="action_ar_compass">AR Compass</string>
+    <string name="action_exit_ar">Exit AR</string>
+    <string name="ar_compass_permission_denied">Camera permission is required to open AR compass.</string>
+    <string name="ar_compass_open_failed">Unable to open camera. Please check permission or device support.</string>
 
     <string name="crosshair_current_case">Current case: %1$s</string>
     <string name="crosshair_search_title">Search location</string>

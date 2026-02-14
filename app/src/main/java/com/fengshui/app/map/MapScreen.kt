@@ -1,7 +1,9 @@
 package com.fengshui.app.map
 
+import android.content.pm.PackageManager
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +37,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -48,9 +53,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import com.fengshui.app.R
 import com.fengshui.app.map.ui.CompassOverlay
-import com.fengshui.app.map.CompassManager
 import com.fengshui.app.data.PointRepository
 import com.fengshui.app.data.FengShuiPoint
 import com.fengshui.app.data.PointType
@@ -87,6 +92,7 @@ import com.fengshui.app.map.ui.SectorConfig
 import com.fengshui.app.map.ui.RegistrationDialog
 import com.fengshui.app.map.ui.MultiSelectDestinationDialog
 import com.fengshui.app.map.ui.AmapMapViewWrapper
+import com.fengshui.app.map.ui.ArCompassOverlay
 import com.fengshui.app.map.GoogleMapView
 import com.fengshui.app.map.LifeCircleUtils
 import com.fengshui.app.map.poi.MapPoiProvider
@@ -201,6 +207,7 @@ fun MapScreen(
     val scope = rememberCoroutineScope()
     var sideBarExpanded by remember { mutableStateOf(false) }
     val sidebarScrollState = rememberScrollState()
+    var arCompassEnabled by remember { mutableStateOf(false) }
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -257,6 +264,20 @@ fun MapScreen(
     val msgSectorSearchFailed = stringResource(id = R.string.sector_search_failed)
     val msgSectorFromMapCenter = stringResource(id = R.string.sector_origin_map_center_notice)
     val msgSectorSortByDistance = stringResource(id = R.string.sector_sort_distance)
+    val msgArPermissionDenied = stringResource(id = R.string.ar_compass_permission_denied)
+    val msgArOpenFailed = stringResource(id = R.string.ar_compass_open_failed)
+    val actionArCompass = stringResource(id = R.string.action_ar_compass)
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            arCompassEnabled = true
+        } else {
+            trialMessage = msgArPermissionDenied
+            showTrialDialog = true
+        }
+    }
     val msgSectorSortByName = stringResource(id = R.string.sector_sort_name)
     val msgPostSavedPoint = stringResource(id = R.string.post_save_point_saved)
     val msgPostSavedOrigin = stringResource(id = R.string.point_type_origin)
@@ -435,7 +456,7 @@ fun MapScreen(
             try {
                 mapProvider.addMarker(
                     UniversalLatLng(poi.lat, poi.lng),
-                    poi.name
+                    "[POI] ${poi.name}"
                 )
             } catch (e: Exception) {
                 android.util.Log.e("MapScreen", "Failed to add POI marker: ${e.message}")
@@ -703,28 +724,24 @@ fun MapScreen(
     // 罗盘显示的坐标（根据锁定状态决定）
     // 已删除旧的 compassLat/compassLng 逻辑，改用 lockedLat/lockedLng
 
-    val compassManager = remember(mapProviderType) {
-        CompassManager(context) { lat, lng, deg ->
-            // 只更新方向角，位置信息保持不变
-            azimuth = deg
-        }
-    }
-
     DisposableEffect(mapProviderType) {
         locationHelper.start()  // 启动GPS定位
-        compassManager.start()
+        azimuth = mapProvider.getCameraPosition()?.bearing ?: 0f
         
         // 注册地图相机移动监听，用于更新锁定模式下罗盘位置
-        mapProvider.onCameraChange {
+        mapProvider.onCameraChange { cam ->
             val now = SystemClock.elapsedRealtime()
             if (now - ui.lastProgrammaticMoveTimestamp > 700) {
                 markUserManualCamera()
             }
+            // Compass follows map bearing only (not device sensors).
+            azimuth = cam.bearing
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
         }
-        mapProvider.onCameraChangeFinish {
+        mapProvider.onCameraChangeFinish { cam ->
+            azimuth = cam.bearing
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
@@ -743,7 +760,6 @@ fun MapScreen(
         
         onDispose {
             locationHelper.stop()  // 停止GPS定位
-            compassManager.stop()
         }
     }
 
@@ -834,6 +850,48 @@ fun MapScreen(
                     ) {
                         Text("Unsupported map provider")
                     }
+                }
+            }
+
+            // Top-left north indicator: points to map north based on camera bearing.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    // Keep this below the top title/language bar so it is always visible on map area.
+                    .padding(start = 12.dp, top = 114.dp)
+                    .zIndex(20f)
+                    .background(Color(0xF7FFFFFF), RoundedCornerShape(12.dp))
+                    .border(width = 1.dp, color = Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Canvas(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .rotate(-azimuth)
+                    ) {
+                        val cx = size.width / 2f
+                        val top = size.height * 0.1f
+                        val half = size.width * 0.22f
+                        val h = size.height * 0.55f
+                        drawLine(
+                            color = Color.Black,
+                            start = Offset(cx, size.height * 0.9f),
+                            end = Offset(cx, size.height * 0.22f),
+                            strokeWidth = 2.5f
+                        )
+                        drawPath(
+                            path = androidx.compose.ui.graphics.Path().apply {
+                                moveTo(cx, top)
+                                lineTo(cx - half, top + h)
+                                lineTo(cx + half, top + h)
+                                close()
+                            },
+                            color = Color.Black
+                        )
+                    }
+                    Text("北", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    Text("N", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                 }
             }
             
@@ -1109,6 +1167,20 @@ fun MapScreen(
                                     }
                                 }, modifier = subButtonModifier) {
                                     Text(stringResource(id = R.string.action_locate), fontSize = 11.sp)
+                                }
+                                SpacerSmall()
+                                Button(onClick = {
+                                    val granted = ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.CAMERA
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) {
+                                        arCompassEnabled = true
+                                    } else {
+                                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                    }
+                                }, modifier = subButtonModifier) {
+                                    Text(actionArCompass, fontSize = 11.sp)
                                 }
                                 SpacerSmall()
                             }
@@ -1471,6 +1543,24 @@ fun MapScreen(
                 }
             }
 
+            if (arCompassEnabled) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(30f)
+                ) {
+                    ArCompassOverlay(
+                        modifier = Modifier.fillMaxSize(),
+                        onClose = { arCompassEnabled = false },
+                        onCameraOpenError = {
+                            arCompassEnabled = false
+                            trialMessage = msgArOpenFailed
+                            showTrialDialog = true
+                        }
+                    )
+                }
+            }
+
             if (showLineInfo) {
                 AlertDialog(
                     onDismissRequest = { showLineInfo = false },
@@ -1762,7 +1852,10 @@ fun MapScreen(
 
             if (ui.showSectorResultDialog) {
                 AlertDialog(
-                    onDismissRequest = { ui.showSectorResultDialog = false },
+                    onDismissRequest = {
+                        ui.showSectorResultDialog = false
+                        showPoiMarkers(emptyList())
+                    },
                     title = {
                         Text(stringResource(id = R.string.sector_result_title, ui.sectorConfigLabel))
                     },
@@ -1877,7 +1970,10 @@ fun MapScreen(
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { ui.showSectorResultDialog = false }) { Text(stringResource(id = R.string.action_close)) }
+                        TextButton(onClick = {
+                            ui.showSectorResultDialog = false
+                            showPoiMarkers(emptyList())
+                        }) { Text(stringResource(id = R.string.action_close)) }
                     }
                 )
             }

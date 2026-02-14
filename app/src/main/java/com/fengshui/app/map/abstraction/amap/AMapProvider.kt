@@ -6,6 +6,7 @@ import com.amap.api.maps.AMap
 import com.amap.api.maps.model.LatLng
 import com.amap.api.maps.model.MarkerOptions
 import com.amap.api.maps.model.PolylineOptions
+import com.amap.api.maps.model.BitmapDescriptorFactory
 import com.amap.api.maps.CameraUpdateFactory
 import android.graphics.Color
 
@@ -46,10 +47,15 @@ class AMapProvider(
      */
     override fun addMarker(position: UniversalLatLng, title: String?): UniversalMarker {
         requireNotNull(mAMap) { "AMap not initialized" }
+        val isPoiMarker = title?.startsWith("[POI] ") == true
+        val displayTitle = if (isPoiMarker) title?.removePrefix("[POI] ") ?: "Marker" else (title ?: "Marker")
         
         val markerOptions = MarkerOptions()
             .position(LatLng(position.latitude, position.longitude))
-            .title(title ?: "Marker")
+            .title(displayTitle)
+        if (isPoiMarker) {
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET))
+        }
         
         val marker = mAMap!!.addMarker(markerOptions)
         val markerId = "am_marker_${System.currentTimeMillis()}_${position.latitude}"
@@ -193,7 +199,8 @@ class AMapProvider(
         val amapPosition = mAMap!!.cameraPosition
         return CameraPosition(
             target = UniversalLatLng(amapPosition.target.latitude, amapPosition.target.longitude),
-            zoom = amapPosition.zoom
+            zoom = amapPosition.zoom,
+            bearing = amapPosition.bearing
         )
     }
     
@@ -242,7 +249,8 @@ class AMapProvider(
                     cameraMoveCallback?.invoke(
                         CameraPosition(
                             target = UniversalLatLng(cameraPosition.target.latitude, cameraPosition.target.longitude),
-                            zoom = cameraPosition.zoom
+                            zoom = cameraPosition.zoom,
+                            bearing = cameraPosition.bearing
                         )
                     )
                 }
@@ -253,7 +261,8 @@ class AMapProvider(
                     cameraChangeCallback?.invoke(
                         CameraPosition(
                             target = UniversalLatLng(cameraPosition.target.latitude, cameraPosition.target.longitude),
-                            zoom = cameraPosition.zoom
+                            zoom = cameraPosition.zoom,
+                            bearing = cameraPosition.bearing
                         )
                     )
                 }

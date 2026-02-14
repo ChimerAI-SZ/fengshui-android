@@ -8,6 +8,7 @@ import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import android.graphics.Color
 
 /**
@@ -49,10 +50,15 @@ class GoogleMapProvider(
      */
     override fun addMarker(position: UniversalLatLng, title: String?): UniversalMarker {
         requireNotNull(mGoogleMap) { "GoogleMap not initialized" }
+        val isPoiMarker = title?.startsWith("[POI] ") == true
+        val displayTitle = if (isPoiMarker) title?.removePrefix("[POI] ") ?: "Marker" else (title ?: "Marker")
         
         val markerOptions = MarkerOptions()
             .position(LatLng(position.latitude, position.longitude))
-            .title(title ?: "Marker")
+            .title(displayTitle)
+        if (isPoiMarker) {
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(280f))
+        }
         
         val marker = mGoogleMap!!.addMarker(markerOptions)
         val markerId = "gm_marker_${System.currentTimeMillis()}_${position.latitude}"
@@ -204,7 +210,8 @@ class GoogleMapProvider(
         val cameraPosition = mGoogleMap!!.cameraPosition
         return CameraPosition(
             target = UniversalLatLng(cameraPosition.target.latitude, cameraPosition.target.longitude),
-            zoom = cameraPosition.zoom
+            zoom = cameraPosition.zoom,
+            bearing = cameraPosition.bearing
         )
     }
     
@@ -253,7 +260,8 @@ class GoogleMapProvider(
                 cameraMoveCallback?.invoke(
                     CameraPosition(
                         target = UniversalLatLng(cameraPosition.target.latitude, cameraPosition.target.longitude),
-                        zoom = cameraPosition.zoom
+                        zoom = cameraPosition.zoom,
+                        bearing = cameraPosition.bearing
                     )
                 )
             }
@@ -267,7 +275,8 @@ class GoogleMapProvider(
                 cameraChangeCallback?.invoke(
                     CameraPosition(
                         target = UniversalLatLng(cameraPosition.target.latitude, cameraPosition.target.longitude),
-                        zoom = cameraPosition.zoom
+                        zoom = cameraPosition.zoom,
+                        bearing = cameraPosition.bearing
                     )
                 )
             }

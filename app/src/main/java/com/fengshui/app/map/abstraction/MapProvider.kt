@@ -3,7 +3,7 @@ package com.fengshui.app.map.abstraction
 // 统一数据类型（最小化实现，后续可扩展）
 data class UniversalLatLng(val latitude: Double, val longitude: Double)
 data class UniversalLatLngBounds(val southwest: UniversalLatLng, val northeast: UniversalLatLng)
-data class CameraPosition(val target: UniversalLatLng, val zoom: Float)
+data class CameraPosition(val target: UniversalLatLng, val zoom: Float, val bearing: Float = 0f)
 data class ScreenPoint(val x: Float, val y: Float)
 
 enum class MapType {
