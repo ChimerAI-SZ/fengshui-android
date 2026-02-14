@@ -13,23 +13,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.math.PI
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
 
@@ -40,7 +35,7 @@ import com.fengshui.app.R
  * - 24山标注（子、丑、寅、卯...）
  * - 8卦符号（乾、坤、离、坎...）
  * - 度数标注
- * - 旋转指针
+ * - 旋转盘面（无指针）
  * - 实时显示方位角和坐标
  */
 @Composable
@@ -49,7 +44,7 @@ fun CompassOverlay(
     latitude: Double?,
     longitude: Double?,
     modifier: Modifier = Modifier,
-    sizeDp: androidx.compose.ui.unit.Dp = 200.dp,
+    sizeDp: androidx.compose.ui.unit.Dp = 240.dp,
     centerHoleRadiusDp: androidx.compose.ui.unit.Dp = 20.dp,
     showInfo: Boolean = true
 ) {
@@ -70,251 +65,165 @@ fun CompassOverlay(
         Box(
             modifier = Modifier
                 .size(compassSize)
-                .shadow(elevation = 8.dp, shape = CircleShape)
-                // Semi-opaque neutral background to separate compass from map.
-                .background(Color(0xF0F3F4F6), shape = CircleShape),
+                .background(Color.Transparent, shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            // 罗盘主体 Canvas
-            Canvas(modifier = Modifier.size(compassSize)) {
-                val centerX = size.width / 2f
-                val centerY = size.height / 2f
-                val radius = size.minDimension / 2f
-                val holeRadius = with(density) { centerHoleRadiusDp.toPx() }
+            // Rotate dial itself (no rotating needle).
+            Box(
+                modifier = Modifier
+                    .size(compassSize)
+                    .rotate(-azimuthDegrees),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.size(compassSize)) {
+                    val centerX = size.width / 2f
+                    val centerY = size.height / 2f
+                    val radius = size.minDimension / 2f
+                    val holeRadius = with(density) { centerHoleRadiusDp.toPx() }
 
-                // ========== 外圈：360度标注 ==========
-                // 外圆边框
-                drawCircle(
-                    color = Color(0xFF6E6E6E).copy(alpha = 0.55f),
-                    radius = radius,
-                    style = Stroke(width = 2f)
-                )
+                    drawCircle(color = Color.Black, radius = radius, style = Stroke(width = 1.4f))
 
-                // 度数刻度：5°短刻度，10°长刻度，类似传统罗盘外圈
-                for (deg in 0 until 360 step 5) {
-                    val angle = Math.toRadians((deg - 90).toDouble())
-                    val outerRadius = radius * 0.97f
-                    val innerRadius = if (deg % 10 == 0) radius * 0.87f else radius * 0.91f
-                    
-                    val x1 = centerX + (outerRadius * cos(angle)).toFloat()
-                    val y1 = centerY + (outerRadius * sin(angle)).toFloat()
-                    val x2 = centerX + (innerRadius * cos(angle)).toFloat()
-                    val y2 = centerY + (innerRadius * sin(angle)).toFloat()
-                    
-                    drawLine(
-                        color = Color(0xFF444444).copy(alpha = if (deg % 10 == 0) 0.5f else 0.35f),
-                        start = Offset(x1, y1),
-                        end = Offset(x2, y2),
-                        strokeWidth = if (deg % 10 == 0) 1.35f else 0.95f
+                    for (deg in 0 until 360 step 5) {
+                        val angle = Math.toRadians((deg - 90).toDouble())
+                        val outerRadius = radius * 0.97f
+                        val innerRadius = if (deg % 10 == 0) radius * 0.87f else radius * 0.91f
+                        val x1 = centerX + (outerRadius * cos(angle)).toFloat()
+                        val y1 = centerY + (outerRadius * sin(angle)).toFloat()
+                        val x2 = centerX + (innerRadius * cos(angle)).toFloat()
+                        val y2 = centerY + (innerRadius * sin(angle)).toFloat()
+                        drawLine(
+                            color = Color.Black.copy(alpha = if (deg % 10 == 0) 1.0f else 0.78f),
+                            start = Offset(x1, y1),
+                            end = Offset(x2, y2),
+                            strokeWidth = if (deg % 10 == 0) 1.2f else 0.85f
+                        )
+                    }
+
+                    val degreePaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.BLACK
+                        textSize = with(density) { 9.sp.toPx() }
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isAntiAlias = true
+                        isFakeBoldText = true
+                    }
+                    val labelRadius = radius * 0.90f
+                    for (deg in 0 until 360 step 10) {
+                        val angle = Math.toRadians((deg - 90).toDouble())
+                        val tx = centerX + (labelRadius * cos(angle)).toFloat()
+                        val ty = centerY + (labelRadius * sin(angle)).toFloat()
+                        drawContext.canvas.nativeCanvas.drawText(
+                            deg.toString(),
+                            tx,
+                            ty + degreePaint.textSize / 3f,
+                            degreePaint
+                        )
+                    }
+
+                    val shanRadius = radius * 0.70f
+                    drawCircle(color = Color.Black.copy(alpha = 0.9f), radius = shanRadius, style = Stroke(width = 1f))
+
+                    for (i in 0 until 24) {
+                        val angle = Math.toRadians(((i * 15) - 90).toDouble())
+                        val x1 = centerX + (radius * 0.57f * cos(angle)).toFloat()
+                        val y1 = centerY + (radius * 0.57f * sin(angle)).toFloat()
+                        val x2 = centerX + (radius * 0.79f * cos(angle)).toFloat()
+                        val y2 = centerY + (radius * 0.79f * sin(angle)).toFloat()
+                        drawLine(
+                            color = Color.Black.copy(alpha = 0.55f),
+                            start = Offset(x1, y1),
+                            end = Offset(x2, y2),
+                            strokeWidth = 0.9f
+                        )
+                    }
+
+                    val baguaRadius = radius * 0.52f
+                    val dirRadius = radius * 0.40f
+                    drawCircle(color = Color.Black.copy(alpha = 0.82f), radius = baguaRadius, style = Stroke(width = 1f))
+                    drawCircle(color = Color.Black.copy(alpha = 0.82f), radius = dirRadius, style = Stroke(width = 1f))
+                    drawCircle(color = Color.Black.copy(alpha = 0.72f), radius = holeRadius, style = Stroke(width = 1f))
+
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.9f),
+                        radius = holeRadius * 0.12f,
+                        center = Offset(centerX, centerY)
                     )
                 }
 
-                // 外圈角度数字（每10度一个）
-                val textPaint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(220, 20, 20, 20)
-                    textSize = with(density) { 9.sp.toPx() }
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                    isFakeBoldText = true
-                }
-                val labelRadius = radius * 0.83f
-                for (deg in 0 until 360 step 10) {
-                    val angle = Math.toRadians((deg - 90).toDouble())
-                    val tx = centerX + (labelRadius * cos(angle)).toFloat()
-                    val ty = centerY + (labelRadius * sin(angle)).toFloat()
-                    val label = deg.toString()
-                    drawContext.canvas.nativeCanvas.drawText(label, tx, ty + textPaint.textSize / 3f, textPaint)
-                }
+                val compassSizePx = with(density) { compassSize.toPx() }
+                val radiusBase = compassSizePx / 2f
 
-                // ========== 24山圈 ==========
-                val shanRadius = radius * 0.70f
-                drawCircle(
-                    color = Color(0xFF9A9A9A).copy(alpha = 0.45f),
-                    radius = shanRadius,
-                    style = Stroke(width = 1f)
-                )
-
-                // 24个扇形圈（每15度）
                 for (i in 0 until 24) {
-                    val angle1 = Math.toRadians(((i * 15) - 90).toDouble())
-                    val angle2 = Math.toRadians((((i + 1) * 15) - 90).toDouble())
-                    
-                    val x1 = centerX + (radius * 0.65f * cos(angle1)).toFloat()
-                    val y1 = centerY + (radius * 0.65f * sin(angle1)).toFloat()
-                    val x2 = centerX + (radius * 0.75f * cos(angle1)).toFloat()
-                    val y2 = centerY + (radius * 0.75f * sin(angle1)).toFloat()
-                    
-                    drawLine(
-                        color = Color(0xFF8C8C8C).copy(alpha = 0.45f),
-                        start = Offset(x1, y1),
-                        end = Offset(x2, y2),
-                        strokeWidth = 0.9f
-                    )
+                    val angleDeg = (i * 15f) + 7.5f - 90f
+                    val angleRad = Math.toRadians(angleDeg.toDouble())
+                    val radiusPx = if (i % 3 == 0) radiusBase * 0.64f else radiusBase * 0.60f
+                    val offsetX = radiusPx * cos(angleRad).toFloat()
+                    val offsetY = radiusPx * sin(angleRad).toFloat()
+                    // Radially inward orientation.
+                    val textRotation = angleDeg - 90f
+
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .align(Alignment.Center)
+                            .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp)
+                            .rotate(textRotation),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = shanNames[i],
+                            fontSize = if (i % 3 == 0) 13.sp else 10.sp,
+                            fontWeight = if (i % 3 == 0) FontWeight.Bold else FontWeight.Normal,
+                            style = TextStyle(color = if (i % 3 == 0) Color(0xFFB31212) else Color.Black),
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                 }
 
-                // ========== 8卦圈 ==========
-                val baguaRadius = radius * 0.52f
-                drawCircle(
-                    color = Color(0xFF8A8A8A).copy(alpha = 0.45f),
-                    radius = baguaRadius,
-                    style = Stroke(width = 1f)
-                )
+                for (i in 0 until 8) {
+                    val angleDeg = (i * 45f) + 22.5f - 90f
+                    val angleRad = Math.toRadians(angleDeg.toDouble())
+                    val radiusPx = radiusBase * 0.48f
+                    val offsetX = radiusPx * cos(angleRad).toFloat()
+                    val offsetY = radiusPx * sin(angleRad).toFloat()
+                    // Radially inward orientation.
+                    val textRotation = angleDeg - 90f
 
-                // ========== 方向圈 ==========
-                val dirRadius = radius * 0.40f
-                drawCircle(
-                    color = Color(0xFF8A8A8A).copy(alpha = 0.45f),
-                    radius = dirRadius,
-                    style = Stroke(width = 1f)
-                )
-
-                // ========== 中心部分 ==========
-                // 中心圆：保持全透明，仅保留红色十字
-                drawCircle(
-                    color = Color.Transparent,
-                    radius = dirRadius * 0.75f
-                )
-
-                // 中心十字准心（红色）
-                val crossSize = dirRadius * 0.35f
-                drawLine(
-                    color = Color.Red,
-                    start = Offset(centerX - crossSize, centerY),
-                    end = Offset(centerX + crossSize, centerY),
-                    strokeWidth = 2.5f
-                )
-                drawLine(
-                    color = Color.Red,
-                    start = Offset(centerX, centerY - crossSize),
-                    end = Offset(centerX, centerY + crossSize),
-                    strokeWidth = 2.5f
-                )
-
-                // 蓝色圆圈（当前位置指示）
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.45f),
-                    radius = dirRadius * 0.6f,
-                    style = Stroke(width = 2f)
-                )
-                drawCircle(
-                    color = Color(0xFF2D55A0).copy(alpha = 0.55f),
-                    radius = dirRadius * 0.55f,
-                    style = Stroke(width = 1.6f)
-                )
-            }
-
-            // 24山标注（外圈）
-            // 计算罗盘的有效半径（以 px 为单位）
-            val compassSizePx = with(density) { compassSize.toPx() }
-            val radiusBase = compassSizePx / 2f
-            
-            for (i in 0 until 24) {
-                val angleDeg = (i * 15f) - 90f
-                val angleRad = Math.toRadians(angleDeg.toDouble())
-                val radiusPx = radiusBase * 0.68f
-                
-                val offsetX = radiusPx * cos(angleRad).toFloat()
-                val offsetY = radiusPx * sin(angleRad).toFloat()
-                
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .align(Alignment.Center)
-                        .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = shanNames[i],
-                        fontSize = if (i % 3 == 0) 11.sp else 10.sp,
-                        fontWeight = if (i % 3 == 0) FontWeight.Bold else FontWeight.Normal,
-                        style = TextStyle(color = if (i % 3 == 0) Color(0xFF9E1E1E) else Color(0xFF202020)),
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .align(Alignment.Center)
+                            .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp)
+                            .rotate(textRotation),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = baGuaNames[i],
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            style = TextStyle(color = Color.Black),
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                 }
             }
 
-            // 8卦标注（中间圆）
-            for (i in 0 until 8) {
-                val angleDeg = (i * 45f) + 22.5f - 90f
-                val angleRad = Math.toRadians(angleDeg.toDouble())
-                val radiusPx = radiusBase * 0.48f
-                
-                val offsetX = radiusPx * cos(angleRad).toFloat()
-                val offsetY = radiusPx * sin(angleRad).toFloat()
-                
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .align(Alignment.Center)
-                        .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = baGuaNames[i],
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        style = TextStyle(color = Color(0xFF111111)),
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-            }
-
-            // 方向标注（N、E、S、W）
-            Box(modifier = Modifier.size(compassSize), contentAlignment = Alignment.TopCenter) {
-                Text("N", fontSize = 14.sp, fontWeight = FontWeight.Bold, style = TextStyle(color = Color.Red))
-            }
-            Box(modifier = Modifier.size(compassSize), contentAlignment = Alignment.BottomCenter) {
-                Text("S", fontSize = 14.sp, fontWeight = FontWeight.Bold, style = TextStyle(color = Color.Red))
-            }
-            Box(modifier = Modifier.size(compassSize), contentAlignment = Alignment.CenterStart) {
-                Text("W", fontSize = 13.sp, style = TextStyle(color = Color.Black))
-            }
-            Box(modifier = Modifier.size(compassSize), contentAlignment = Alignment.CenterEnd) {
-                Text("E", fontSize = 13.sp, style = TextStyle(color = Color.Black))
-            }
-
-            // 旋转指针（红上黑下）
+            // Fixed top reference marker (non-rotating).
             Canvas(
                 modifier = Modifier
-                    .size(compassSize * 0.55f)
+                    .size(compassSize)
                     .align(Alignment.Center)
-                    .rotate(azimuthDegrees)
             ) {
                 val cx = size.width / 2f
-                val cy = size.height / 2f
-                val needleLength = size.height / 2.8f
-                val arrowSize = needleLength * 0.18f
-                
-                // 上指针（红色）
-                drawLine(
-                    color = Color(0xFFD72020),
-                    start = Offset(cx, cy),
-                    end = Offset(cx, cy - needleLength),
-                    strokeWidth = 4.6f,
-                    cap = StrokeCap.Round
-                )
-
-                val arrowPath = Path().apply {
-                    moveTo(cx, cy - needleLength)
-                    lineTo(cx - arrowSize, cy - needleLength + arrowSize * 1.4f)
-                    lineTo(cx + arrowSize, cy - needleLength + arrowSize * 1.4f)
+                val topY = size.height * 0.02f
+                val triWidth = size.width * 0.05f
+                val triHeight = size.height * 0.05f
+                val marker = Path().apply {
+                    moveTo(cx, topY)
+                    lineTo(cx - triWidth / 2f, topY + triHeight)
+                    lineTo(cx + triWidth / 2f, topY + triHeight)
                     close()
                 }
-                drawPath(color = Color(0xFF8E1B1B), path = arrowPath, style = Stroke(width = 1.4f))
-                drawPath(color = Color(0xFFD72020), path = arrowPath)
-                
-                // 下指针（黑色）
-                drawLine(
-                    color = Color(0xFF222222),
-                    start = Offset(cx, cy),
-                    end = Offset(cx, cy + needleLength * 0.25f),
-                    strokeWidth = 2.4f,
-                    cap = StrokeCap.Round
-                )
-                
-                // 中心点
-                drawCircle(color = Color.White, radius = 5.5f, center = Offset(cx, cy))
-                drawCircle(color = Color.Black, radius = 3.5f, center = Offset(cx, cy))
+                drawPath(marker, color = Color.Black)
             }
         }
 
@@ -322,7 +231,7 @@ fun CompassOverlay(
             // 信息显示区（方位角和坐标）
             Box(
                 modifier = Modifier
-                    .background(Color(0xF3FFFFFF), shape = CircleShape)
+                    .background(Color.Transparent, shape = CircleShape)
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -334,13 +243,13 @@ fun CompassOverlay(
                         text = stringResource(id = R.string.compass_bearing_label, azimuthDegrees),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        style = TextStyle(color = Color(0xFF333333))
+                        style = TextStyle(color = Color.Black)
                     )
                     if (latitude != null && longitude != null) {
                         Text(
                             text = "${"%.4f".format(latitude)}, ${"%.4f".format(longitude)}",
                             fontSize = 9.sp,
-                            style = TextStyle(color = Color(0xFF666666))
+                            style = TextStyle(color = Color.Black.copy(alpha = 0.86f))
                         )
                     }
                 }

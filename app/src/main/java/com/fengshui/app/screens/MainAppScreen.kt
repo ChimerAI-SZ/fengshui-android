@@ -9,6 +9,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -16,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,6 +42,8 @@ import com.fengshui.app.R
 import com.fengshui.app.utils.ApiKeyConfig
 import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 
 /**
  * MainAppScreen - 主应用界面
@@ -62,17 +66,21 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     var currentTab by remember { mutableStateOf(NavigationItem.MAP) }
     var quickAddCaseId by remember { mutableStateOf<String?>(null) }
     var searchFocus by remember { mutableStateOf<UniversalLatLng?>(null) }
+    var showUnsupportedMapDialog by remember { mutableStateOf(false) }
+    var showLanguageOnlyConfirmDialog by remember { mutableStateOf(false) }
+    var pendingIsChinese by remember { mutableStateOf(false) }
+    var pendingLanguageTag by remember { mutableStateOf("en") }
+    var pendingTargetProvider by remember { mutableStateOf(MapProviderType.AMAP) }
+    var pendingUnsupportedReason by remember { mutableStateOf("") }
     val context = LocalContext.current
     val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
     val amapKey = ApiKeyConfig.getAmapApiKey(context)
     val hasGoogleMapKey = ApiKeyConfig.isValidKey(googleKey)
     val hasAmapKey = ApiKeyConfig.isValidKey(amapKey)
-    val defaultProviderType = if (hasAmapKey) {
-        MapProviderType.AMAP
-    } else {
-        MapProviderType.GOOGLE
-    }
-    var mapProviderType by remember { mutableStateOf(defaultProviderType) }
+    // Always default to AMap. Keep provider across locale/activity recreation.
+    var mapProviderTypeName by rememberSaveable { mutableStateOf(MapProviderType.AMAP.name) }
+    val mapProviderType = runCatching { MapProviderType.valueOf(mapProviderTypeName) }
+        .getOrDefault(MapProviderType.AMAP)
     val googleMapProvider = remember { GoogleMapProvider(context) }
     val amapProvider = remember { AMapProvider(context) }
     val mapProvider = when (mapProviderType) {
@@ -90,6 +98,60 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         )
     }
 
+    fun applyLanguageOnly() {
+        isChinese = pendingIsChinese
+        AppCompatDelegate.setApplicationLocales(
+            LocaleListCompat.forLanguageTags(pendingLanguageTag)
+        )
+    }
+
+    fun isProviderAvailable(providerType: MapProviderType): Boolean {
+        return when (providerType) {
+            MapProviderType.GOOGLE -> {
+                val googlePlayOk = GoogleApiAvailability.getInstance()
+                    .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
+                hasGoogleMapKey && googlePlayOk
+            }
+            MapProviderType.AMAP -> hasAmapKey
+        }
+    }
+
+    fun providerUnsupportedReason(providerType: MapProviderType): String {
+        return when (providerType) {
+            MapProviderType.GOOGLE -> {
+                val googlePlayOk = GoogleApiAvailability.getInstance()
+                    .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
+                when {
+                    !hasGoogleMapKey -> "未配置 Google Maps API Key"
+                    !googlePlayOk -> "当前设备缺少 Google Play Services"
+                    else -> "当前环境可能不支持 Google 地图"
+                }
+            }
+            MapProviderType.AMAP -> {
+                if (!hasAmapKey) "未配置高德 API Key" else "当前环境可能不支持高德地图"
+            }
+        }
+    }
+
+    fun requestLanguageSwitch(nextChinese: Boolean, languageTag: String) {
+        pendingIsChinese = nextChinese
+        pendingLanguageTag = languageTag
+        pendingTargetProvider = if (nextChinese) MapProviderType.AMAP else MapProviderType.GOOGLE
+
+        if (mapProviderType == pendingTargetProvider) {
+            applyLanguageOnly()
+            return
+        }
+
+        if (isProviderAvailable(pendingTargetProvider)) {
+            mapProviderTypeName = pendingTargetProvider.name
+            applyLanguageOnly()
+        } else {
+            pendingUnsupportedReason = providerUnsupportedReason(pendingTargetProvider)
+            showUnsupportedMapDialog = true
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -99,20 +161,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                     LanguageTogglePill(
                         isChinese = isChinese,
                         onSelectChinese = {
-                            if (!isChinese) {
-                                isChinese = true
-                                AppCompatDelegate.setApplicationLocales(
-                                    LocaleListCompat.forLanguageTags("zh-CN")
-                                )
-                            }
+                            requestLanguageSwitch(nextChinese = true, languageTag = "zh-CN")
                         },
                         onSelectEnglish = {
-                            if (isChinese) {
-                                isChinese = false
-                                AppCompatDelegate.setApplicationLocales(
-                                    LocaleListCompat.forLanguageTags("en")
-                                )
-                            }
+                            requestLanguageSwitch(nextChinese = false, languageTag = "en")
                         },
                         modifier = Modifier.padding(end = 8.dp)
                     )
@@ -156,7 +208,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                                 MapProviderType.AMAP -> hasAmapKey
                             }
                             if (targetAvailable && mapProviderType != targetType) {
-                                mapProviderType = targetType
+                                mapProviderTypeName = targetType.name
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
@@ -192,6 +244,70 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+
+    if (showUnsupportedMapDialog) {
+        val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) "高德地图" else "Google 地图"
+        AlertDialog(
+            onDismissRequest = { showUnsupportedMapDialog = false },
+            title = { Text("地图切换确认") },
+            text = {
+                Text(
+                    "当前环境可能不支持 $providerLabel（$pendingUnsupportedReason），继续切换可能闪退。\n\n" +
+                        "你可以选择：\n" +
+                        "1) 仍然切换地图并执行语言切换\n" +
+                        "2) 只切换语言，不切换地图"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        mapProviderTypeName = pendingTargetProvider.name
+                        applyLanguageOnly()
+                        showUnsupportedMapDialog = false
+                    }
+                ) {
+                    Text("确认切换地图")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showUnsupportedMapDialog = false
+                        showLanguageOnlyConfirmDialog = true
+                    }
+                ) {
+                    Text("仅切换语言")
+                }
+            }
+        )
+    }
+
+    if (showLanguageOnlyConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageOnlyConfirmDialog = false },
+            title = { Text("执行确认") },
+            text = { Text("将仅切换语言，不切换地图。是否继续？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        applyLanguageOnly()
+                        showLanguageOnlyConfirmDialog = false
+                    }
+                ) {
+                    Text("继续")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showLanguageOnlyConfirmDialog = false
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 

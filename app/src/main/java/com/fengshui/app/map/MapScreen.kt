@@ -973,7 +973,7 @@ fun MapScreen(
                     }
                 )
             } else {
-                // 屏幕中心十字准心
+                // Keep center tap target for quick add, but remove persistent red cross overlay.
                 Box(modifier = Modifier
                     .align(Alignment.Center)
                     .size(48.dp)
@@ -986,24 +986,6 @@ fun MapScreen(
                         showAddPointDialog = true
                     }
                     .zIndex(2f)  // 高于地图
-                    .drawBehind {
-                        val w = size.width
-                        val h = size.height
-                        // 横线
-                        drawLine(
-                            color = Color.Red,
-                            start = Offset(0f, h / 2),
-                            end = Offset(w, h / 2),
-                            strokeWidth = 2f
-                        )
-                        // 竖线
-                        drawLine(
-                            color = Color.Red,
-                            start = Offset(w / 2, 0f),
-                            end = Offset(w / 2, h),
-                            strokeWidth = 2f
-                        )
-                    }
                 ) {}
             }
 
@@ -1401,7 +1383,7 @@ fun MapScreen(
                             azimuthDegrees = azimuth,
                             latitude = realGpsLat!!,
                             longitude = realGpsLng!!,
-                            sizeDp = 220.dp,
+                            sizeDp = 260.dp,
                             showInfo = false
                         )
                     }
@@ -1433,7 +1415,7 @@ fun MapScreen(
                         updateCompassScreenPosition()
                     }
                     
-                    val compassRadiusPx = with(density) { 110.dp.toPx() }  // 罗盘半径
+                    val compassRadiusPx = with(density) { 130.dp.toPx() }  // 罗盘半径
                     
                     Box(modifier = Modifier
                         .fillMaxSize()
@@ -1449,7 +1431,7 @@ fun MapScreen(
                                 azimuthDegrees = azimuth,
                                 latitude = lockedLat!!,
                                 longitude = lockedLng!!,
-                                sizeDp = 220.dp,
+                                sizeDp = 260.dp,
                                 showInfo = false
                             )
                         }
