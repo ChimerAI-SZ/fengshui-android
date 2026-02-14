@@ -57,6 +57,9 @@
     <string name="action_create_case_and_save">新建案例并保存</string>
     <string name="action_undo">撤销</string>
     <string name="action_continue_add">继续加点</string>
+    <string name="action_stop_add">停止加点</string>
+    <string name="continuous_add_name_title">请输入点位名称</string>
+    <string name="continuous_add_map_move_hint">可拖动地图移动十字准星，再保存下一个点位。</string>
     <string name="action_switch_point_type">切换类型</string>
     <string name="action_previous_step">上一步</string>
 

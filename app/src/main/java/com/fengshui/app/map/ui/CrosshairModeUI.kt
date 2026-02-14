@@ -39,6 +39,7 @@ fun CrosshairModeUI(
     continuousAddMode: Boolean,
     continuousAddType: PointType,
     onSwitchContinuousAddType: () -> Unit,
+    onStopContinuousAdd: () -> Unit,
     onSelectOrigin: () -> Unit,
     onSelectDestination: () -> Unit,
     onCancel: () -> Unit
@@ -48,7 +49,7 @@ fun CrosshairModeUI(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0x33000000))
+                .background(Color(0x14000000))
         )
 
         // Center crosshair
@@ -73,6 +74,24 @@ fun CrosshairModeUI(
                     )
                 }
         )
+
+        if (continuousAddMode) {
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 72.dp, start = 12.dp, end = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xE6FFFFFF)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(
+                    text = stringResource(id = R.string.continuous_add_map_move_hint),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    fontSize = 11.sp,
+                    color = Color(0xFF4A3A8C),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
         // Bottom panel
         Card(
@@ -136,6 +155,10 @@ fun CrosshairModeUI(
                                 Button(onClick = onSwitchContinuousAddType, modifier = Modifier.weight(1f)) {
                                     Text(stringResource(id = R.string.action_switch_point_type))
                                 }
+                            }
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Button(onClick = onStopContinuousAdd, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(id = R.string.action_stop_add))
                             }
                         } else {
                             Row(

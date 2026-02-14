@@ -210,6 +210,10 @@ fun MapScreen(
     var addPointNewProjectName by remember { mutableStateOf("") }
     var continuousAddMode by remember { mutableStateOf(false) }
     var continuousAddType by remember { mutableStateOf(PointType.ORIGIN) }
+    var showContinuousNameDialog by remember { mutableStateOf(false) }
+    var continuousPointName by remember { mutableStateOf("") }
+    var continuousPendingType by remember { mutableStateOf(PointType.ORIGIN) }
+    var continuousPendingTarget by remember { mutableStateOf<UniversalLatLng?>(null) }
     var showPostSaveQuickActions by remember { mutableStateOf(false) }
     var lastAddedPoint by remember { mutableStateOf<FengShuiPoint?>(null) }
     var lastAddedPointType by remember { mutableStateOf(PointType.ORIGIN) }
@@ -274,6 +278,7 @@ fun MapScreen(
     val lifeCircleStepEntertainment = stringResource(id = R.string.life_circle_step_entertainment)
     val lifeCircleStepHint = stringResource(id = R.string.life_circle_step_hint)
     val actionSelectDestination = stringResource(id = R.string.action_select_destination)
+    val continuousAddNameTitle = stringResource(id = R.string.continuous_add_name_title)
     
     // 地图是否已初始化
     val mapReady = remember { mutableStateOf(false) }
@@ -482,6 +487,58 @@ fun MapScreen(
             )
         } else {
             showPostSaveQuickActions = true
+        }
+    }
+
+    fun saveCrosshairPoint(pointType: PointType, target: UniversalLatLng, enteredName: String? = null) {
+        val project = currentProject
+        if (project == null) {
+            trialMessage = msgSelectCase
+            showTrialDialog = true
+            return
+        }
+        scope.launch {
+            try {
+                val defaultName = if (pointType == PointType.ORIGIN) {
+                    context.getString(R.string.default_origin_name, originPoints.size + 1)
+                } else {
+                    context.getString(R.string.default_destination_name, destPoints.size + 1)
+                }
+                val name = enteredName?.trim().orEmpty().ifBlank { defaultName }
+                val p = repo.createPoint(
+                    name,
+                    target.latitude,
+                    target.longitude,
+                    pointType,
+                    project.id,
+                    groupName = project.name
+                )
+                if (pointType == PointType.ORIGIN) {
+                    originPoints.add(p)
+                    selectedOriginPoint = p
+                    selectedDestinationIds.clear()
+                } else {
+                    destPoints.add(p)
+                    selectedDestinationIds.clear()
+                }
+                refreshLinesForDisplay()
+                compassLocked = false
+                lockedLat = null
+                lockedLng = null
+                requestCameraMove(
+                    UniversalLatLng(p.latitude, p.longitude),
+                    15f,
+                    CameraMoveSource.USER_POINT_SELECT
+                )
+                onPointAdded(p, pointType)
+                if (!continuousAddMode) {
+                    ui.crosshairMode = false
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MapScreen", "Error adding point: ${e.message}", e)
+                trialMessage = e.message ?: if (pointType == PointType.ORIGIN) msgAddOriginFailed else msgAddDestinationFailed
+                showTrialDialog = true
+            }
         }
     }
 
@@ -874,6 +931,11 @@ fun MapScreen(
                             PointType.ORIGIN
                         }
                     },
+                    onStopContinuousAdd = {
+                        continuousAddMode = false
+                        viewModel.closeCrosshair()
+                        showPostSaveQuickActions = false
+                    },
                     onSelectOrigin = {
                         val target = ui.crosshairLocation ?: mapProvider.getCameraPosition()?.target
                         if (target == null) {
@@ -881,40 +943,13 @@ fun MapScreen(
                             showTrialDialog = true
                             return@CrosshairModeUI
                         }
-                        if (currentProject == null) {
-                            trialMessage = msgSelectCase
-                            showTrialDialog = true
-                            return@CrosshairModeUI
-                        }
-                        scope.launch {
-                            try {
-                                val p = repo.createPoint(
-                                    context.getString(R.string.default_origin_name, originPoints.size + 1),
-                                    target.latitude,
-                                    target.longitude,
-                                    PointType.ORIGIN,
-                                    currentProject!!.id,
-                                    groupName = currentProject!!.name
-                                )
-                                originPoints.add(p)
-                                selectedOriginPoint = p
-                                selectedDestinationIds.clear()
-                                refreshLinesForDisplay()
-                                compassLocked = false
-                                lockedLat = null
-                                lockedLng = null
-                                requestCameraMove(
-                                    com.fengshui.app.map.abstraction.UniversalLatLng(p.latitude, p.longitude),
-                                    15f,
-                                    CameraMoveSource.USER_POINT_SELECT
-                                )
-                                onPointAdded(p, PointType.ORIGIN)
-                                ui.crosshairMode = false
-                            } catch (e: Exception) {
-                                android.util.Log.e("MapScreen", "Error adding origin point: ${e.message}", e)
-                                trialMessage = e.message ?: msgAddOriginFailed
-                                showTrialDialog = true
-                            }
+                        if (continuousAddMode) {
+                            continuousPendingType = PointType.ORIGIN
+                            continuousPendingTarget = target
+                            continuousPointName = context.getString(R.string.default_origin_name, originPoints.size + 1)
+                            showContinuousNameDialog = true
+                        } else {
+                            saveCrosshairPoint(PointType.ORIGIN, target)
                         }
                     },
                     onSelectDestination = {
@@ -924,39 +959,13 @@ fun MapScreen(
                             showTrialDialog = true
                             return@CrosshairModeUI
                         }
-                        if (currentProject == null) {
-                            trialMessage = msgSelectCase
-                            showTrialDialog = true
-                            return@CrosshairModeUI
-                        }
-                        scope.launch {
-                            try {
-                                val p = repo.createPoint(
-                                    context.getString(R.string.default_destination_name, destPoints.size + 1),
-                                    target.latitude,
-                                    target.longitude,
-                                    PointType.DESTINATION,
-                                    currentProject!!.id,
-                                    groupName = currentProject!!.name
-                                )
-                                destPoints.add(p)
-                                selectedDestinationIds.clear()
-                                refreshLinesForDisplay()
-                                compassLocked = false
-                                lockedLat = null
-                                lockedLng = null
-                                requestCameraMove(
-                                    com.fengshui.app.map.abstraction.UniversalLatLng(p.latitude, p.longitude),
-                                    15f,
-                                    CameraMoveSource.USER_POINT_SELECT
-                                )
-                                onPointAdded(p, PointType.DESTINATION)
-                                ui.crosshairMode = false
-                            } catch (e: Exception) {
-                                android.util.Log.e("MapScreen", "Error adding destination point: ${e.message}", e)
-                                trialMessage = e.message ?: msgAddDestinationFailed
-                                showTrialDialog = true
-                            }
+                        if (continuousAddMode) {
+                            continuousPendingType = PointType.DESTINATION
+                            continuousPendingTarget = target
+                            continuousPointName = context.getString(R.string.default_destination_name, destPoints.size + 1)
+                            showContinuousNameDialog = true
+                        } else {
+                            saveCrosshairPoint(PointType.DESTINATION, target)
                         }
                     },
                     onCancel = {
@@ -1352,6 +1361,8 @@ fun MapScreen(
                             Button(
                                 onClick = {
                                     showPostSaveQuickActions = false
+                                    continuousAddMode = true
+                                    continuousAddType = lastAddedPointType
                                     viewModel.openCrosshair(
                                         crosshairManualTitle,
                                         msgContinueAddHint,
@@ -1360,6 +1371,17 @@ fun MapScreen(
                                 },
                                 modifier = Modifier.weight(1f)
                             ) { Text(msgContinueAdd, fontSize = 12.sp) }
+                        }
+                        SpacerSmall()
+                        Button(
+                            onClick = {
+                                showPostSaveQuickActions = false
+                                continuousAddMode = false
+                                lastAddedPoint = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(id = R.string.action_stop_add), fontSize = 12.sp)
                         }
                     }
                 }
@@ -1874,6 +1896,53 @@ fun MapScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = { ui.showSectorResultDialog = false }) { Text(stringResource(id = R.string.action_close)) }
+                    }
+                )
+            }
+
+            if (showContinuousNameDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showContinuousNameDialog = false
+                        continuousPendingTarget = null
+                    },
+                    title = { Text(continuousAddNameTitle) },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = continuousPointName,
+                                onValueChange = { continuousPointName = it },
+                                label = { Text(stringResource(id = R.string.add_point_name_label)) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            val target = continuousPendingTarget
+                            if (target == null) {
+                                trialMessage = msgNoLocation
+                                showTrialDialog = true
+                            } else {
+                                saveCrosshairPoint(
+                                    pointType = continuousPendingType,
+                                    target = target,
+                                    enteredName = continuousPointName
+                                )
+                            }
+                            showContinuousNameDialog = false
+                            continuousPendingTarget = null
+                        }) {
+                            Text(stringResource(id = R.string.action_save))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showContinuousNameDialog = false
+                            continuousPendingTarget = null
+                        }) {
+                            Text(stringResource(id = R.string.action_cancel))
+                        }
                     }
                 )
             }

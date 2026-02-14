@@ -57,6 +57,9 @@
     <string name="action_create_case_and_save">Create case and save</string>
     <string name="action_undo">Undo</string>
     <string name="action_continue_add">Continue add</string>
+    <string name="action_stop_add">Stop add</string>
+    <string name="continuous_add_name_title">Name This Point</string>
+    <string name="continuous_add_map_move_hint">Drag the map to move crosshair, then save next point.</string>
     <string name="action_switch_point_type">Switch type</string>
     <string name="action_previous_step">Previous</string>
 
