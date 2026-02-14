@@ -3,26 +3,19 @@ package com.fengshui.app.map.poi
 import com.fengshui.app.map.abstraction.UniversalLatLng
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.GET
-import retrofit2.http.Query
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 /**
- * GooglePlacesProvider - Google Places API 客户端（Retrofit + REST API）
- *
- * 需要：
- * 1. 在 local.properties 中配置 GOOGLE_PLACES_API_KEY
- * 2. build.gradle 中已有 retrofit 和 gson 依赖
+ * GooglePlacesProvider based on Places API (New): places:searchText
+ * This avoids legacy Text Search endpoint dependency.
  */
 class GooglePlacesProvider(private val apiKey: String) : MapPoiProvider {
-
-    private val retrofit = Retrofit.Builder()
-        .baseUrl("https://maps.googleapis.com/maps/api/place/")
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-
-    private val apiService = retrofit.create(GooglePlacesApiService::class.java)
+    private val client = OkHttpClient()
+    private var lastStats: ProviderSearchStats = ProviderSearchStats(0, 0, null)
 
     override suspend fun searchByKeyword(
         keyword: String,
@@ -30,108 +23,144 @@ class GooglePlacesProvider(private val apiKey: String) : MapPoiProvider {
         radiusMeters: Int
     ): List<PoiResult> = withContext(Dispatchers.IO) {
         try {
-            val locationStr = if (location != null && radiusMeters > 0) {
-                "${location.latitude},${location.longitude}"
-            } else {
-                null
-            }
-
-            val response = apiService.textSearch(
-                query = keyword,
-                key = apiKey,
-                location = locationStr,
-                radius = if (radiusMeters > 0) radiusMeters else null
-            )
-
-            if (response.status == "OK" && response.results != null) {
-                response.results.map { place ->
-                    PoiResult(
-                        id = place.place_id ?: "",
-                        name = place.name ?: "",
-                        lat = place.geometry?.location?.lat ?: 0.0,
-                        lng = place.geometry?.location?.lng ?: 0.0,
-                        address = place.formatted_address,
-                        provider = "google"
-                    )
+            lastStats = ProviderSearchStats(0, 0, null)
+            val mappedType = PoiTypeMapper.toGoogleType(keyword)
+            val attempts = mutableListOf<Pair<String, String?>>()
+            if (mappedType != null) {
+                attempts += keyword to mappedType
+                attempts += keyword to null
+                PoiTypeMapper.fallbackQueries(keyword).forEach { q ->
+                    attempts += q to mappedType
+                    attempts += q to null
                 }
             } else {
+                attempts += keyword to null
+            }
+
+            val all = mutableListOf<Pair<PoiResult, List<String>>>()
+            var lastErr = "Google no result"
+            for ((query, typeOpt) in attempts.distinct()) {
+                val reqBody = JSONObject().apply {
+                    put("textQuery", query)
+                    put("languageCode", "zh-CN")
+                    put("maxResultCount", 20)
+                    if (typeOpt != null) {
+                        put("includedType", typeOpt)
+                        put("strictTypeFiltering", true)
+                    }
+                    if (location != null && radiusMeters > 0) {
+                        val effectiveRadius = radiusMeters.coerceIn(100, 50_000)
+                        put(
+                            "locationBias",
+                            JSONObject().put(
+                                "circle",
+                                JSONObject()
+                                    .put(
+                                        "center",
+                                        JSONObject()
+                                            .put("latitude", location.latitude)
+                                            .put("longitude", location.longitude)
+                                    )
+                                    .put("radius", effectiveRadius.toDouble())
+                            )
+                        )
+                    }
+                }
+
+                val request = Request.Builder()
+                    .url("https://places.googleapis.com/v1/places:searchText")
+                    .header("X-Goog-Api-Key", apiKey)
+                    .header(
+                        "X-Goog-FieldMask",
+                        "places.id,places.displayName,places.formattedAddress,places.location,places.types"
+                    )
+                    .post(reqBody.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                var shouldSkip = false
+                client.newCall(request).execute().use { resp ->
+                    val body = resp.body?.string().orEmpty()
+                    if (!resp.isSuccessful) {
+                        val msg = runCatching {
+                            JSONObject(body).optJSONObject("error")?.optString("message")
+                        }.getOrNull().orEmpty().ifBlank { body.take(180) }
+                        lastErr = "Google HTTP ${resp.code}: $msg"
+                        shouldSkip = true
+                        return@use
+                    }
+
+                    val root = JSONObject(body)
+                    val places = root.optJSONArray("places")
+                    if (places == null) {
+                        shouldSkip = true
+                        return@use
+                    }
+                    for (i in 0 until places.length()) {
+                        val item = places.optJSONObject(i) ?: continue
+                        val id = item.optString("id")
+                        val name = item.optJSONObject("displayName")?.optString("text").orEmpty()
+                        val address = item.optString("formattedAddress")
+                        val loc = item.optJSONObject("location")
+                        val lat = loc?.optDouble("latitude") ?: Double.NaN
+                        val lng = loc?.optDouble("longitude") ?: Double.NaN
+                        if (!lat.isFinite() || !lng.isFinite()) continue
+                        val types = mutableListOf<String>()
+                        val arr = item.optJSONArray("types")
+                        if (arr != null) {
+                            for (t in 0 until arr.length()) {
+                                arr.optString(t)?.takeIf { it.isNotBlank() }?.let(types::add)
+                            }
+                        }
+                        all += PoiResult(
+                            id = id,
+                            name = name.ifBlank { "POI ${i + 1}" },
+                            lat = lat,
+                            lng = lng,
+                            address = address,
+                            provider = "google"
+                        ) to types
+                    }
+                }
+                if (shouldSkip) continue
+                if (all.isNotEmpty()) break
+            }
+
+            if (all.isEmpty()) {
+                lastStats = ProviderSearchStats(0, 0, lastErr)
                 emptyList()
+            } else {
+                val dedup = all.distinctBy { (p, _) ->
+                    val lat = String.format("%.5f", p.lat)
+                    val lng = String.format("%.5f", p.lng)
+                    "${p.name}|$lat|$lng"
+                }
+                val rawCount = dedup.size
+                val filtered = if (mappedType == null) {
+                    dedup.map { it.first }
+                } else {
+                    dedup.filter { pair ->
+                        val poi = pair.first
+                        val types = pair.second
+                        PoiTypeMapper.matchesGoogleTypes(keyword, types) ||
+                            PoiTypeMapper.matchesTextByCategory(keyword, poi.name, poi.address)
+                    }.map { it.first }
+                }
+                lastStats = ProviderSearchStats(
+                    rawCount = rawCount,
+                    typeFilteredCount = filtered.size,
+                    debugStatus = "OK"
+                )
+                filtered
             }
         } catch (e: Exception) {
+            lastStats = ProviderSearchStats(0, 0, "Google EXCEPTION: ${e.message ?: "unknown"}")
             emptyList()
         }
     }
 
-    override suspend fun searchInBounds(bounds: Any): List<PoiResult> = withContext(Dispatchers.IO) {
-        // TODO: Phase 4.1 - 实现边界搜索
-        emptyList()
-    }
+    override suspend fun searchInBounds(bounds: Any): List<PoiResult> = emptyList()
 
-    override suspend fun reverseGeocode(location: UniversalLatLng): String? = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.reverseGeocode(
-                latlng = "${location.latitude},${location.longitude}",
-                key = apiKey
-            )
+    override suspend fun reverseGeocode(location: UniversalLatLng): String? = null
 
-            if (response.status == "OK" && response.results != null && response.results.isNotEmpty()) {
-                response.results[0].formatted_address
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
+    override fun lastSearchStats(): ProviderSearchStats = lastStats
 }
-
-// ===== Google Places API 接口与数据模型 =====
-
-interface GooglePlacesApiService {
-    @GET("textsearch/json")
-    suspend fun textSearch(
-        @Query("query") query: String,
-        @Query("key") key: String,
-        @Query("location") location: String? = null,
-        @Query("radius") radius: Int? = null,
-        @Query("language") language: String = "zh-CN"
-    ): GoogleTextSearchResponse
-
-    @GET("geocode/json")
-    suspend fun reverseGeocode(
-        @Query("latlng") latlng: String,
-        @Query("key") key: String,
-        @Query("language") language: String = "zh-CN"
-    ): GoogleGeocodeResponse
-}
-
-data class GoogleTextSearchResponse(
-    val status: String,
-    val results: List<GooglePlace>? = null
-)
-
-data class GooglePlace(
-    val place_id: String? = null,
-    val name: String? = null,
-    val formatted_address: String? = null,
-    val geometry: GoogleGeometry? = null
-)
-
-data class GoogleGeometry(
-    val location: GoogleLatLng? = null
-)
-
-data class GoogleLatLng(
-    val lat: Double = 0.0,
-    val lng: Double = 0.0
-)
-
-data class GoogleGeocodeResponse(
-    val status: String,
-    val results: List<GoogleGeocodeResult>? = null
-)
-
-data class GoogleGeocodeResult(
-    val formatted_address: String? = null,
-    val geometry: GoogleGeometry? = null
-)

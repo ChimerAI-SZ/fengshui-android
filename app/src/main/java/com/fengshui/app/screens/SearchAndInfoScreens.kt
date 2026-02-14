@@ -97,11 +97,11 @@ fun SearchScreen(
     val repo = remember { PointRepository(context) }
     
     val providerGoogle: MapPoiProvider? = remember {
-        val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
+        val googleKey = ApiKeyConfig.getGooglePlacesApiKey(context)
         if (ApiKeyConfig.isValidKey(googleKey)) GooglePlacesProvider(googleKey!!) else null
     }
     val providerAmap: MapPoiProvider? = remember {
-        val amapKey = ApiKeyConfig.getAmapApiKey(context)
+        val amapKey = ApiKeyConfig.getAmapWebApiKey(context)
         if (ApiKeyConfig.isValidKey(amapKey)) AmapPoiProvider(amapKey!!) else null
     }
     val providerFallback: MapPoiProvider = remember { NominatimPoiProvider() }

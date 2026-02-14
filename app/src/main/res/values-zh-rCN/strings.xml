@@ -193,6 +193,7 @@
     <string name="sector_keyword_tower">大厦</string>
     <string name="sector_draw_only_notice">关键词为空，已仅绘制扇形区域。</string>
     <string name="sector_poi_radius_limited_notice">POI 搜索范围已限制在 250km 内。</string>
+    <string name="sector_fallback_nearby_notice">未找到严格扇形内结果，已显示附近可用结果。</string>
     <string name="sector_search_failed">扇形搜索失败</string>
     <string name="sector_origin_map_center_notice">未选择原点，已使用地图中心作为扇形起点。</string>
 

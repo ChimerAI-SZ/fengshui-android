@@ -32,6 +32,16 @@
             android:name="com.amap.api.v2.apikey"
             android:value="${AMAP_API_KEY}" />
 
+        <!-- Google Places Web Service Key (POI) -->
+        <meta-data
+            android:name="com.fengshui.api.GOOGLE_PLACES_API_KEY"
+            android:value="${GOOGLE_PLACES_API_KEY}" />
+
+        <!-- AMap Web Service Key (POI) -->
+        <meta-data
+            android:name="com.fengshui.api.AMAP_WEB_API_KEY"
+            android:value="${AMAP_WEB_API_KEY}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

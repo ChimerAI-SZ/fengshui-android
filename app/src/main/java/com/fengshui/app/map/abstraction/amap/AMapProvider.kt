@@ -27,11 +27,13 @@ class AMapProvider(
     
     private var mAMap: AMap? = aMap
     private val markers = mutableMapOf<String, com.amap.api.maps.model.Marker>()
+    private val markerIdByRef = mutableMapOf<com.amap.api.maps.model.Marker, String>()
     private val polylines = mutableMapOf<String, com.amap.api.maps.model.Polyline>()
     private val polylineIdByRef = mutableMapOf<com.amap.api.maps.model.Polyline, String>()
     private var cameraMoveCallback: ((CameraPosition) -> Unit)? = null
     private var cameraChangeCallback: ((CameraPosition) -> Unit)? = null
     private var polylineClickCallback: ((UniversalPolyline) -> Unit)? = null
+    private var markerClickCallback: ((UniversalMarker) -> Unit)? = null
     
     /**
      * 设置底层 AMap 对象（由 MapViewWrapper 在地图加载完成后调用）
@@ -47,19 +49,36 @@ class AMapProvider(
      */
     override fun addMarker(position: UniversalLatLng, title: String?): UniversalMarker {
         requireNotNull(mAMap) { "AMap not initialized" }
-        val isPoiMarker = title?.startsWith("[POI] ") == true
-        val displayTitle = if (isPoiMarker) title?.removePrefix("[POI] ") ?: "Marker" else (title ?: "Marker")
+        val rawTitle = title ?: "Marker"
+        val isPoiMarker = rawTitle.startsWith("[POI] ")
+        val colorMatch = Regex("^\\[(DEST_C[0-4])\\]\\s*").find(rawTitle)
+        val colorCode = colorMatch?.groupValues?.getOrNull(1)
+        val displayTitle = when {
+            isPoiMarker -> rawTitle.removePrefix("[POI] ").ifBlank { "Marker" }
+            colorMatch != null -> rawTitle.removePrefix(colorMatch.value).ifBlank { "Marker" }
+            else -> rawTitle
+        }
         
         val markerOptions = MarkerOptions()
             .position(LatLng(position.latitude, position.longitude))
             .title(displayTitle)
         if (isPoiMarker) {
             markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET))
+        } else if (colorCode != null) {
+            val hue = when (colorCode) {
+                "DEST_C0" -> BitmapDescriptorFactory.HUE_RED
+                "DEST_C1" -> BitmapDescriptorFactory.HUE_AZURE
+                "DEST_C2" -> BitmapDescriptorFactory.HUE_GREEN
+                "DEST_C3" -> BitmapDescriptorFactory.HUE_ORANGE
+                else -> BitmapDescriptorFactory.HUE_ROSE
+            }
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(hue))
         }
         
         val marker = mAMap!!.addMarker(markerOptions)
         val markerId = "am_marker_${System.currentTimeMillis()}_${position.latitude}"
         markers[markerId] = marker
+        markerIdByRef[marker] = markerId
         
         return UniversalMarker(markerId)
     }
@@ -210,6 +229,7 @@ class AMapProvider(
     fun clearMarkers() {
         markers.values.forEach { it.remove() }
         markers.clear()
+        markerIdByRef.clear()
     }
     
     /**
@@ -227,6 +247,11 @@ class AMapProvider(
     fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
         polylineClickCallback = callback
         registerPolylineClickListener()
+    }
+
+    fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {
+        markerClickCallback = callback
+        registerMarkerClickListener()
     }
     
     /**
@@ -285,6 +310,24 @@ class AMapProvider(
             }
         } else {
             mAMap!!.setOnPolylineClickListener(null)
+        }
+    }
+
+    private fun registerMarkerClickListener() {
+        if (mAMap == null) return
+
+        if (markerClickCallback != null) {
+            mAMap!!.setOnMarkerClickListener { marker ->
+                val id = markerIdByRef[marker]
+                if (id != null) {
+                    markerClickCallback?.invoke(UniversalMarker(id))
+                    true
+                } else {
+                    false
+                }
+            }
+        } else {
+            mAMap!!.setOnMarkerClickListener(null)
         }
     }
 }

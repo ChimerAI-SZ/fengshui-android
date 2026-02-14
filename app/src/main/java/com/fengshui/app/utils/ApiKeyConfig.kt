@@ -26,6 +26,23 @@ object ApiKeyConfig {
             null
         }
     }
+
+    /**
+     * Google Places API (New) Web Service key.
+     */
+    fun getGooglePlacesApiKey(context: Context): String? {
+        return try {
+            val ai: ApplicationInfo = context.packageManager.getApplicationInfo(
+                context.packageName,
+                android.content.pm.PackageManager.GET_META_DATA
+            )
+            ai.metaData?.getString("com.fengshui.api.GOOGLE_PLACES_API_KEY")
+                ?: getGoogleMapsApiKey(context)
+                ?: "PLACEHOLDER"
+        } catch (e: Exception) {
+            getGoogleMapsApiKey(context)
+        }
+    }
     
     /**
      * 从 AndroidManifest.xml 的 meta-data 中获取 Amap API Key
@@ -39,6 +56,23 @@ object ApiKeyConfig {
             ai.metaData?.getString("com.amap.api.v2.apikey") ?: "PLACEHOLDER"
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * AMap Web Service key for POI REST APIs.
+     */
+    fun getAmapWebApiKey(context: Context): String? {
+        return try {
+            val ai: ApplicationInfo = context.packageManager.getApplicationInfo(
+                context.packageName,
+                android.content.pm.PackageManager.GET_META_DATA
+            )
+            ai.metaData?.getString("com.fengshui.api.AMAP_WEB_API_KEY")
+                ?: getAmapApiKey(context)
+                ?: "PLACEHOLDER"
+        } catch (e: Exception) {
+            getAmapApiKey(context)
         }
     }
     

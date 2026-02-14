@@ -1,6 +1,7 @@
 package com.fengshui.app.map.poi
 
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
@@ -16,6 +17,10 @@ import retrofit2.http.Query
  * 2. build.gradle 中已有 retrofit 和 gson 依赖
  */
 class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
+    companion object {
+        private const val TAG = "AmapPoiProvider"
+    }
+    private var lastStats: ProviderSearchStats = ProviderSearchStats(0, 0, null)
 
     private val retrofit = Retrofit.Builder()
         .baseUrl("https://restapi.amap.com/v3/")
@@ -30,21 +35,102 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
         radiusMeters: Int
     ): List<PoiResult> = withContext(Dispatchers.IO) {
         try {
+            lastStats = ProviderSearchStats(0, 0, null)
+            val mappedTypeCode = PoiTypeMapper.toAmapTypeCode(keyword)
             val locationStr = if (location != null) {
                 "${location.longitude},${location.latitude}"
             } else {
                 null
             }
+            val fallbackQueries = PoiTypeMapper.fallbackQueries(keyword)
 
-            val response = apiService.textSearch(
-                keywords = keyword,
-                key = apiKey,
-                location = locationStr,
-                radius = if (radiusMeters > 0) radiusMeters else null
-            )
+            val response = if (mappedTypeCode != null && locationStr != null) {
+                val maxRadius = radiusMeters.coerceAtLeast(100).coerceAtMost(50_000)
+                val radiusAttempts = linkedSetOf(
+                    maxRadius,
+                    5_000,
+                    10_000,
+                    20_000,
+                    50_000
+                ).filter { it <= maxRadius }.ifEmpty { listOf(maxRadius) }
+
+                val aggregated = mutableListOf<AmapPoi>()
+                for (r in radiusAttempts) {
+                    val resp = apiService.aroundSearch(
+                        location = locationStr,
+                        key = apiKey,
+                        radius = r,
+                        types = mappedTypeCode
+                    )
+                    if (resp.status == "1" && !resp.pois.isNullOrEmpty()) {
+                        aggregated.addAll(resp.pois)
+                    }
+                }
+                // typed + text fallback round for broader recall
+                if (aggregated.isEmpty()) {
+                    for (q in fallbackQueries) {
+                        val resp = apiService.textSearch(
+                            keywords = q,
+                            key = apiKey,
+                            location = locationStr,
+                            radius = maxRadius
+                        )
+                        if (resp.status == "1" && !resp.pois.isNullOrEmpty()) {
+                            aggregated.addAll(resp.pois)
+                            if (aggregated.size >= 30) break
+                        }
+                    }
+                }
+                if (aggregated.isNotEmpty()) {
+                    AmapTextSearchResponse(status = "1", pois = aggregated.distinctBy { "${it.id}|${it.location}" })
+                } else {
+                    // Secondary typed fallback: text search then verify by returned POI type labels.
+                    apiService.textSearch(
+                        keywords = keyword,
+                        key = apiKey,
+                        location = locationStr,
+                        radius = maxRadius
+                    )
+                }
+            } else {
+                val maxRadius = if (radiusMeters > 0) radiusMeters.coerceAtMost(50_000) else 20_000
+                var chosen: AmapTextSearchResponse? = null
+                for (q in fallbackQueries) {
+                    val resp = apiService.textSearch(
+                        keywords = q,
+                        key = apiKey,
+                        location = locationStr,
+                        radius = maxRadius
+                    )
+                    if (resp.status == "1" && !resp.pois.isNullOrEmpty()) {
+                        chosen = resp
+                        break
+                    }
+                }
+                chosen ?: apiService.textSearch(
+                    keywords = keyword,
+                    key = apiKey,
+                    location = locationStr,
+                    radius = if (radiusMeters > 0) radiusMeters else null
+                )
+            }
 
             if (response.status == "1" && response.pois != null) {
-                response.pois.map { poi ->
+                val rawCount = response.pois.size
+                val normalized = response.pois
+                    .filter { poi ->
+                        if (mappedTypeCode == null) true
+                        else PoiTypeMapper.matchesAmapTypeLabel(keyword, poi.type)
+                    }
+                lastStats = ProviderSearchStats(
+                    rawCount = rawCount,
+                    typeFilteredCount = normalized.size,
+                    debugStatus = "OK"
+                )
+                if (mappedTypeCode != null && normalized.isEmpty()) {
+                    Log.w(TAG, "typed search got POIs but none matched type-label filter, keyword=$keyword")
+                }
+                normalized.map { poi ->
                     PoiResult(
                         id = poi.id ?: "",
                         name = poi.name ?: "",
@@ -55,9 +141,14 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
                     )
                 }
             } else {
+                val info = response.info ?: "unknown"
+                val code = response.infocode ?: "-"
+                val coverageHint = if (location != null && isLikelyOutsideChina(location)) " (可能为高德海外覆盖不足)" else ""
+                lastStats = ProviderSearchStats(0, 0, "AMap ${response.status}/$code $info$coverageHint")
                 emptyList()
             }
         } catch (e: Exception) {
+            lastStats = ProviderSearchStats(0, 0, "AMap EXCEPTION: ${e.message ?: "unknown"}")
             emptyList()
         }
     }
@@ -83,6 +174,12 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
             null
         }
     }
+
+    override fun lastSearchStats(): ProviderSearchStats = lastStats
+
+    private fun isLikelyOutsideChina(location: UniversalLatLng): Boolean {
+        return location.latitude !in 3.0..54.0 || location.longitude !in 73.0..136.0
+    }
 }
 
 // ===== 高德 API 接口与数据模型 =====
@@ -97,6 +194,17 @@ interface AmapApiService {
         @Query("offset") offset: Int = 20
     ): AmapTextSearchResponse
 
+    @GET("place/around")
+    suspend fun aroundSearch(
+        @Query("location") location: String,
+        @Query("key") key: String,
+        @Query("radius") radius: Int = 3000,
+        @Query("types") types: String? = null,
+        @Query("keywords") keywords: String? = null,
+        @Query("sortrule") sortrule: String = "distance",
+        @Query("offset") offset: Int = 50
+    ): AmapTextSearchResponse
+
     @GET("geocode/regeo")
     suspend fun reverseGeocode(
         @Query("location") location: String,
@@ -106,6 +214,8 @@ interface AmapApiService {
 
 data class AmapTextSearchResponse(
     val status: String,
+    val info: String? = null,
+    val infocode: String? = null,
     val pois: List<AmapPoi>? = null
 )
 
@@ -113,7 +223,8 @@ data class AmapPoi(
     val id: String? = null,
     val name: String? = null,
     val location: String? = null, // "lng,lat"
-    val address: String? = null
+    val address: String? = null,
+    val type: String? = null
 )
 
 data class AmapReverseGeocodeResponse(

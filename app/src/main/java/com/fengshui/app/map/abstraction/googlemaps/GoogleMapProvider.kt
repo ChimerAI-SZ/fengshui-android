@@ -28,11 +28,13 @@ class GoogleMapProvider(
     
     private var mGoogleMap: GoogleMap? = googleMap
     private val markers = mutableMapOf<String, com.google.android.gms.maps.model.Marker>()
+    private val markerIdByRef = mutableMapOf<com.google.android.gms.maps.model.Marker, String>()
     private val polylines = mutableMapOf<String, com.google.android.gms.maps.model.Polyline>()
     private val polylineIdByRef = mutableMapOf<com.google.android.gms.maps.model.Polyline, String>()
     private var cameraMoveCallback: ((CameraPosition) -> Unit)? = null
     private var cameraChangeCallback: ((CameraPosition) -> Unit)? = null
     private var polylineClickCallback: ((UniversalPolyline) -> Unit)? = null
+    private var markerClickCallback: ((UniversalMarker) -> Unit)? = null
     private var pendingMapType: MapType? = null
     
     /**
@@ -40,7 +42,11 @@ class GoogleMapProvider(
      */
     fun setGoogleMap(map: GoogleMap) {
         mGoogleMap = map
+        // Keep interaction parity with AMap: allow manual rotate/tilt gestures.
+        mGoogleMap?.uiSettings?.isRotateGesturesEnabled = true
+        mGoogleMap?.uiSettings?.isTiltGesturesEnabled = true
         registerCameraChangeListener()
+        registerMarkerClickListener()
         registerPolylineClickListener()
         pendingMapType?.let { setMapType(it) }
     }
@@ -50,19 +56,36 @@ class GoogleMapProvider(
      */
     override fun addMarker(position: UniversalLatLng, title: String?): UniversalMarker {
         requireNotNull(mGoogleMap) { "GoogleMap not initialized" }
-        val isPoiMarker = title?.startsWith("[POI] ") == true
-        val displayTitle = if (isPoiMarker) title?.removePrefix("[POI] ") ?: "Marker" else (title ?: "Marker")
+        val rawTitle = title ?: "Marker"
+        val isPoiMarker = rawTitle.startsWith("[POI] ")
+        val colorMatch = Regex("^\\[(DEST_C[0-4])\\]\\s*").find(rawTitle)
+        val colorCode = colorMatch?.groupValues?.getOrNull(1)
+        val displayTitle = when {
+            isPoiMarker -> rawTitle.removePrefix("[POI] ").ifBlank { "Marker" }
+            colorMatch != null -> rawTitle.removePrefix(colorMatch.value).ifBlank { "Marker" }
+            else -> rawTitle
+        }
         
         val markerOptions = MarkerOptions()
             .position(LatLng(position.latitude, position.longitude))
             .title(displayTitle)
         if (isPoiMarker) {
             markerOptions.icon(BitmapDescriptorFactory.defaultMarker(280f))
+        } else if (colorCode != null) {
+            val hue = when (colorCode) {
+                "DEST_C0" -> 0f
+                "DEST_C1" -> 210f
+                "DEST_C2" -> 120f
+                "DEST_C3" -> 30f
+                else -> 300f
+            }
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(hue))
         }
         
         val marker = mGoogleMap!!.addMarker(markerOptions)
         val markerId = "gm_marker_${System.currentTimeMillis()}_${position.latitude}"
         markers[markerId] = marker!!
+        markerIdByRef[marker] = markerId
         
         return UniversalMarker(markerId)
     }
@@ -221,6 +244,7 @@ class GoogleMapProvider(
     fun clearMarkers() {
         markers.values.forEach { it.remove() }
         markers.clear()
+        markerIdByRef.clear()
     }
     
     /**
@@ -238,6 +262,11 @@ class GoogleMapProvider(
     fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
         polylineClickCallback = callback
         registerPolylineClickListener()
+    }
+
+    fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {
+        markerClickCallback = callback
+        registerMarkerClickListener()
     }
     
     /**
@@ -300,6 +329,24 @@ class GoogleMapProvider(
             }
         } else {
             mGoogleMap!!.setOnPolylineClickListener(null)
+        }
+    }
+
+    private fun registerMarkerClickListener() {
+        if (mGoogleMap == null) return
+
+        if (markerClickCallback != null) {
+            mGoogleMap!!.setOnMarkerClickListener { marker ->
+                val id = markerIdByRef[marker]
+                if (id != null) {
+                    markerClickCallback?.invoke(UniversalMarker(id))
+                    true
+                } else {
+                    false
+                }
+            }
+        } else {
+            mGoogleMap!!.setOnMarkerClickListener(null)
         }
     }
 }

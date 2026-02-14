@@ -193,6 +193,7 @@
     <string name="sector_keyword_tower">Tower</string>
     <string name="sector_draw_only_notice">Sector region drawn (keyword is empty).</string>
     <string name="sector_poi_radius_limited_notice">POI search is limited to 250km.</string>
+    <string name="sector_fallback_nearby_notice">No strict sector matches found. Showing nearby usable results.</string>
     <string name="sector_search_failed">Sector search failed</string>
     <string name="sector_origin_map_center_notice">No origin selected. Using map center as sector origin.</string>
 

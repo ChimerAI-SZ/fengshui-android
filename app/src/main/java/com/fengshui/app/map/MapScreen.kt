@@ -101,6 +101,7 @@ import com.fengshui.app.map.poi.AmapPoiProvider
 import com.fengshui.app.map.poi.GooglePlacesProvider
 import com.fengshui.app.map.poi.MockPoiProvider
 import com.fengshui.app.map.poi.NominatimPoiProvider
+import com.fengshui.app.map.poi.PoiTypeMapper
 import com.fengshui.app.map.abstraction.amap.AMapProvider
 import java.util.Locale
 
@@ -147,11 +148,11 @@ fun MapScreen(
     val repo = remember { PointRepository(context) }
 
     val googlePoiProvider: MapPoiProvider? = remember {
-        val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
+        val googleKey = ApiKeyConfig.getGooglePlacesApiKey(context)
         if (ApiKeyConfig.isValidKey(googleKey)) GooglePlacesProvider(googleKey!!) else null
     }
     val amapPoiProvider: MapPoiProvider? = remember {
-        val amapKey = ApiKeyConfig.getAmapApiKey(context)
+        val amapKey = ApiKeyConfig.getAmapWebApiKey(context)
         if (ApiKeyConfig.isValidKey(amapKey)) AmapPoiProvider(amapKey!!) else null
     }
     val nominatimPoiProvider: MapPoiProvider = remember { NominatimPoiProvider() }
@@ -160,7 +161,19 @@ fun MapScreen(
 
     fun buildPoiProviderChain(keyword: String): List<MapPoiProvider> {
         val hasChineseChars = keyword.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
+        val isTypedKeyword = PoiTypeMapper.isTypedCategoryKeyword(keyword)
         return buildList {
+            if (isTypedKeyword) {
+                // Strict type-search mode: use map typed endpoints only, no text-shape fallback providers.
+                if (mapProviderType == MapProviderType.AMAP) {
+                    amapPoiProvider?.let { add(it) }
+                    googlePoiProvider?.let { add(it) }
+                } else {
+                    googlePoiProvider?.let { add(it) }
+                    amapPoiProvider?.let { add(it) }
+                }
+                return@buildList
+            }
             if (mapProviderType == MapProviderType.AMAP || isChinaLocale || hasChineseChars) {
                 amapPoiProvider?.let { add(it) }
             }
@@ -208,6 +221,11 @@ fun MapScreen(
     var sideBarExpanded by remember { mutableStateOf(false) }
     val sidebarScrollState = rememberScrollState()
     var arCompassEnabled by remember { mutableStateOf(false) }
+    val destinationColorIndexById = remember { mutableStateMapOf<String, Int>() }
+    val poiByMarkerId = remember { mutableMapOf<String, PoiResult>() }
+    var selectedPoiDetail by remember { mutableStateOf<PoiResult?>(null) }
+    var showPoiDetailDialog by remember { mutableStateOf(false) }
+    var pendingSectorLocatePoi by remember { mutableStateOf<PoiResult?>(null) }
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -261,6 +279,7 @@ fun MapScreen(
     val msgGoogleSatelliteFallback = stringResource(id = R.string.google_satellite_fallback_to_amap)
     val msgSectorNoKeywordDrawOnly = stringResource(id = R.string.sector_draw_only_notice)
     val msgSectorRadiusLimited = stringResource(id = R.string.sector_poi_radius_limited_notice)
+    val msgSectorFallbackNearby = stringResource(id = R.string.sector_fallback_nearby_notice)
     val msgSectorSearchFailed = stringResource(id = R.string.sector_search_failed)
     val msgSectorFromMapCenter = stringResource(id = R.string.sector_origin_map_center_notice)
     val msgSectorSortByDistance = stringResource(id = R.string.sector_sort_distance)
@@ -418,6 +437,7 @@ fun MapScreen(
     fun clearPoiMarkers() {
         (mapProvider as? com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider)?.clearMarkers()
         (mapProvider as? AMapProvider)?.clearMarkers()
+        poiByMarkerId.clear()
     }
 
     fun renderPointMarkers(clearExisting: Boolean = true) {
@@ -440,9 +460,15 @@ fun MapScreen(
 
         destPoints.forEach { point ->
             try {
+                val colorIndex = destinationColorIndexById[point.id]
+                val title = if (colorIndex != null) {
+                    "[DEST_C${colorIndex}] ${context.getString(R.string.marker_destination_prefix, point.name)}"
+                } else {
+                    context.getString(R.string.marker_destination_prefix, point.name)
+                }
                 mapProvider.addMarker(
                     UniversalLatLng(point.latitude, point.longitude),
-                    context.getString(R.string.marker_destination_prefix, point.name)
+                    title
                 )
             } catch (e: Exception) {
                 android.util.Log.e("MapScreen", "Failed to add destination marker: ${e.message}")
@@ -454,15 +480,45 @@ fun MapScreen(
         clearPoiMarkers()
         results.forEach { poi ->
             try {
-                mapProvider.addMarker(
+                val marker = mapProvider.addMarker(
                     UniversalLatLng(poi.lat, poi.lng),
                     "[POI] ${poi.name}"
                 )
+                poiByMarkerId[marker.id] = poi
             } catch (e: Exception) {
                 android.util.Log.e("MapScreen", "Failed to add POI marker: ${e.message}")
             }
         }
         renderPointMarkers(clearExisting = false)
+    }
+
+    fun clearSectorArtifacts() {
+        ui.sectorOverlayVisible = false
+        ui.sectorResults.clear()
+        ui.showSectorResultDialog = false
+        pendingSectorLocatePoi = null
+        showPoiMarkers(emptyList())
+    }
+
+    fun focusOnSectorResults(results: List<PoiResult>) {
+        if (results.isEmpty()) return
+        if (results.size == 1) {
+            requestCameraMove(UniversalLatLng(results[0].lat, results[0].lng), 16f, CameraMoveSource.SEARCH_RESULT)
+            return
+        }
+        val minLat = results.minOf { it.lat }
+        val maxLat = results.maxOf { it.lat }
+        val minLng = results.minOf { it.lng }
+        val maxLng = results.maxOf { it.lng }
+        val latPad = ((maxLat - minLat) * 0.15).coerceAtLeast(0.002)
+        val lngPad = ((maxLng - minLng) * 0.15).coerceAtLeast(0.002)
+        mapProvider.animateCameraToBounds(
+            com.fengshui.app.map.abstraction.UniversalLatLngBounds(
+                southwest = UniversalLatLng(minLat - latPad, minLng - lngPad),
+                northeast = UniversalLatLng(maxLat + latPad, maxLng + lngPad)
+            ),
+            padding = 120
+        )
     }
 
     fun buildLifeCircleLabels(targetId: String): List<String> {
@@ -471,6 +527,7 @@ fun MapScreen(
 
     fun refreshLinesForDisplay() {
         linesList.clear()
+        destinationColorIndexById.clear()
         val origin = selectedOriginPoint ?: originPoints.firstOrNull()
         if (origin == null) {
             android.util.Log.d("MapScreen", "refreshLinesForDisplay skipped: no origin in current case")
@@ -486,7 +543,8 @@ fun MapScreen(
             selectedDestinationIds.clear()
             activeDestinations = destPoints
         }
-        activeDestinations.forEach { dest ->
+        activeDestinations.forEachIndexed { index, dest ->
+            destinationColorIndexById[dest.id] = index % 5
             linesList.add(LineData(origin, dest))
         }
         android.util.Log.d(
@@ -671,11 +729,18 @@ fun MapScreen(
             for (line in linesList) {
                 try {
                     android.util.Log.d("MapScreen", "Adding polyline from (${line.origin.latitude}, ${line.origin.longitude}) to (${line.destination.latitude}, ${line.destination.longitude})")
+                    val lineColor = when (destinationColorIndexById[line.destination.id] ?: 0) {
+                        0 -> 0xFFE53935.toInt() // red
+                        1 -> 0xFF1E88E5.toInt() // blue
+                        2 -> 0xFF43A047.toInt() // green
+                        3 -> 0xFFFB8C00.toInt() // orange
+                        else -> 0xFF8E24AA.toInt() // purple
+                    }
                     val polyline = mapProvider.addPolyline(
                         com.fengshui.app.map.abstraction.UniversalLatLng(line.origin.latitude, line.origin.longitude),
                         com.fengshui.app.map.abstraction.UniversalLatLng(line.destination.latitude, line.destination.longitude),
                         width = 5f,
-                        color = 0xFF0000FF.toInt()  // 蓝色线条
+                        color = lineColor
                     )
                     lineByPolylineId[polyline.id] = line
                 } catch (e: Exception) {
@@ -812,6 +877,13 @@ fun MapScreen(
                                     showLineInfoFor(line)
                                 }
                             }
+                            mapProvider.setOnMarkerClickListener { marker ->
+                                val poi = poiByMarkerId[marker.id]
+                                if (poi != null) {
+                                    selectedPoiDetail = poi
+                                    showPoiDetailDialog = true
+                                }
+                            }
                             refreshLinesForDisplay()
                             refreshNormalLines()
                         }
@@ -832,6 +904,13 @@ fun MapScreen(
                                 val line = lineByPolylineId[polyline.id]
                                 if (line != null) {
                                     showLineInfoFor(line)
+                                }
+                            }
+                            mapProvider.setOnMarkerClickListener { marker ->
+                                val poi = poiByMarkerId[marker.id]
+                                if (poi != null) {
+                                    selectedPoiDetail = poi
+                                    showPoiDetailDialog = true
                                 }
                             }
                             refreshLinesForDisplay()
@@ -1441,11 +1520,8 @@ fun MapScreen(
                 }
             }
 
-            // Compass overlay
-            // 解锁模式：罗盘固定在屏幕中央，跟随GPS位置
-            // 锁定模式：罗盘固定在地图上的锁定位置，随地图移动
-            
-            if (!compassLocked) {
+            // Compass overlay (hidden in life-circle mode; life-circle uses three point compasses).
+            if (!ui.lifeCircleMode && !compassLocked) {
                 // 解锁模式：罗盘在屏幕中央，显示当前GPS位置
                 if (realGpsLat != null && realGpsLng != null) {
                     Box(modifier = Modifier
@@ -1479,7 +1555,7 @@ fun MapScreen(
                         }
                     }
                 }
-            } else {
+            } else if (!ui.lifeCircleMode) {
                 // 锁定模式：罗盘锁定在指定位置，随地图移动
                 if (lockedLat != null && lockedLng != null) {
                     // 初始化屏幕位置
@@ -1525,6 +1601,36 @@ fun MapScreen(
 
                 val data = ui.lifeCircleData
                 if (data != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(1.3f)
+                    ) {
+                        val lifePoints = listOf(data.homePoint, data.workPoint, data.entertainmentPoint)
+                        lifePoints.forEach { point ->
+                            val screenPos = mapProvider.latLngToScreenLocation(
+                                UniversalLatLng(point.latitude, point.longitude)
+                            )
+                            val radiusPx = with(density) { 64.dp.toPx() }
+                            Box(
+                                modifier = Modifier.offset {
+                                    IntOffset(
+                                        (screenPos.x - radiusPx).toInt(),
+                                        (screenPos.y - radiusPx).toInt()
+                                    )
+                                }
+                            ) {
+                                CompassOverlay(
+                                    azimuthDegrees = azimuth,
+                                    latitude = point.latitude,
+                                    longitude = point.longitude,
+                                    sizeDp = 128.dp,
+                                    showInfo = false
+                                )
+                            }
+                        }
+                    }
+
                     val homeLabels = buildLifeCircleLabels(data.homePoint.id)
                     val workLabels = buildLifeCircleLabels(data.workPoint.id)
                     val entertainmentLabels = buildLifeCircleLabels(data.entertainmentPoint.id)
@@ -1780,12 +1886,8 @@ fun MapScreen(
                     hasExistingSector = ui.sectorOverlayVisible,
                     onConfirm = { config, clearBeforeDraw ->
                         ui.showSectorConfigDialog = false
-                        if (clearBeforeDraw) {
-                            ui.sectorOverlayVisible = false
-                            ui.sectorResults.clear()
-                            ui.showSectorResultDialog = false
-                            showPoiMarkers(emptyList())
-                        }
+                        // Always clear previous sector and POI markers before a new sector search.
+                        clearSectorArtifacts()
 
                         val originFromCase = selectedOriginPoint ?: originPoints.firstOrNull()
                         val usingMapCenter = originFromCase == null
@@ -1827,6 +1929,7 @@ fun MapScreen(
                                 config = config,
                                 onResult = { results ->
                                     showPoiMarkers(results)
+                                    focusOnSectorResults(results)
                                     if (ui.sectorRadiusLimited) {
                                         trialMessage = msgSectorRadiusLimited
                                         showTrialDialog = true
@@ -1841,10 +1944,7 @@ fun MapScreen(
                     },
                     onClearSector = {
                         ui.showSectorConfigDialog = false
-                        ui.sectorOverlayVisible = false
-                        ui.sectorResults.clear()
-                        ui.showSectorResultDialog = false
-                        showPoiMarkers(emptyList())
+                        clearSectorArtifacts()
                     },
                     onDismiss = { ui.showSectorConfigDialog = false }
                 )
@@ -1853,8 +1953,7 @@ fun MapScreen(
             if (ui.showSectorResultDialog) {
                 AlertDialog(
                     onDismissRequest = {
-                        ui.showSectorResultDialog = false
-                        showPoiMarkers(emptyList())
+                        clearSectorArtifacts()
                     },
                     title = {
                         Text(stringResource(id = R.string.sector_result_title, ui.sectorConfigLabel))
@@ -1877,6 +1976,13 @@ fun MapScreen(
                                         stringResource(id = R.string.sector_poi_radius_limited_notice),
                                         fontSize = 11.sp,
                                         color = Color.Gray
+                                    )
+                                }
+                                if (ui.sectorFallbackUsed) {
+                                    Text(
+                                        msgSectorFallbackNearby,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF7A5A00)
                                     )
                                 }
                                 Spacer(modifier = Modifier.size(6.dp))
@@ -1931,6 +2037,8 @@ fun MapScreen(
                                         }
                                         Button(onClick = {
                                             val target = UniversalLatLng(poi.lat, poi.lng)
+                                            pendingSectorLocatePoi = poi
+                                            ui.showSectorResultDialog = false
                                             requestCameraMove(target, 16f, CameraMoveSource.USER_POINT_SELECT)
                                         }) {
                                             Text(stringResource(id = R.string.action_locate_short))
@@ -1971,9 +2079,105 @@ fun MapScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = {
-                            ui.showSectorResultDialog = false
-                            showPoiMarkers(emptyList())
+                            clearSectorArtifacts()
                         }) { Text(stringResource(id = R.string.action_close)) }
+                    }
+                )
+            }
+
+            if (pendingSectorLocatePoi != null && !ui.showSectorResultDialog) {
+                val poi = pendingSectorLocatePoi!!
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 84.dp, start = 12.dp, end = 12.dp)
+                        .zIndex(5f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xEEFFFFFF), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(poi.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(poi.address ?: "", fontSize = 11.sp, color = Color.Gray)
+                        SpacerSmall()
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    if (currentProject == null) {
+                                        trialMessage = msgSelectCase
+                                        showTrialDialog = true
+                                        return@Button
+                                    }
+                                    scope.launch {
+                                        try {
+                                            val p = repo.createPoint(
+                                                poi.name,
+                                                poi.lat,
+                                                poi.lng,
+                                                PointType.DESTINATION,
+                                                currentProject!!.id,
+                                                address = poi.address,
+                                                groupName = currentProject!!.name
+                                            )
+                                            destPoints.add(p)
+                                            selectedDestinationIds.clear()
+                                            refreshLinesForDisplay()
+                                            pendingSectorLocatePoi = null
+                                            ui.showSectorResultDialog = true
+                                        } catch (e: Exception) {
+                                            trialMessage = e.message ?: msgAddDestinationFailed
+                                            showTrialDialog = true
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(id = R.string.action_save))
+                            }
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Button(
+                                onClick = {
+                                    pendingSectorLocatePoi = null
+                                    ui.showSectorResultDialog = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(id = R.string.action_close))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showPoiDetailDialog && selectedPoiDetail != null) {
+                val poi = selectedPoiDetail!!
+                AlertDialog(
+                    onDismissRequest = { showPoiDetailDialog = false },
+                    title = { Text(poi.name) },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(poi.address ?: "")
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text("Lat: ${"%.6f".format(poi.lat)}")
+                            Text("Lng: ${"%.6f".format(poi.lng)}")
+                            Text("Provider: ${poi.provider}")
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            requestCameraMove(
+                                UniversalLatLng(poi.lat, poi.lng),
+                                16f,
+                                CameraMoveSource.USER_POINT_SELECT
+                            )
+                        }) { Text(stringResource(id = R.string.action_locate_short)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showPoiDetailDialog = false }) {
+                            Text(stringResource(id = R.string.action_close))
+                        }
                     }
                 )
             }

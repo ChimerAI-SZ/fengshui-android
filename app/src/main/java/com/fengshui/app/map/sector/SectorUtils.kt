@@ -10,16 +10,21 @@ object SectorUtils {
         pois: List<PoiResult>,
         startAngle: Float,
         endAngle: Float,
-        maxDistanceMeters: Float
+        maxDistanceMeters: Float,
+        bearingOffsetDegrees: Float = 0f,
+        angleToleranceDegrees: Float = 0f
     ): List<PoiResult> {
+        val adjustedStart = normalizeAngle(startAngle - angleToleranceDegrees)
+        val adjustedEnd = normalizeAngle(endAngle + angleToleranceDegrees)
         return pois.filter { poi ->
-            val bearing = RhumbLineUtils.calculateRhumbBearing(
+            val bearingRaw = RhumbLineUtils.calculateRhumbBearing(
                 origin.latitude,
                 origin.longitude,
                 poi.lat,
                 poi.lng
             )
-            val inAngleRange = isAngleInRange(bearing, startAngle, endAngle)
+            val bearing = normalizeAngle(bearingRaw + bearingOffsetDegrees)
+            val inAngleRange = isAngleInRange(bearing, adjustedStart, adjustedEnd)
             val distance = RhumbLineUtils.calculateRhumbDistance(
                 origin,
                 UniversalLatLng(poi.lat, poi.lng)
@@ -35,5 +40,11 @@ object SectorUtils {
         } else {
             angle >= start || angle <= end
         }
+    }
+
+    private fun normalizeAngle(angle: Float): Float {
+        var value = angle % 360f
+        if (value < 0f) value += 360f
+        return value
     }
 }

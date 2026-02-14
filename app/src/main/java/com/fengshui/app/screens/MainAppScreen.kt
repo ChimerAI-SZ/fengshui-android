@@ -43,7 +43,6 @@ import com.fengshui.app.R
 import com.fengshui.app.utils.ApiKeyConfig
 import com.fengshui.app.utils.Prefs
 import androidx.compose.ui.platform.LocalContext
-import java.util.Locale
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,18 +98,16 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     var isChinese by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        // Default language on app open: Chinese.
-        val alreadyChinese = if (initialLocales.isEmpty) {
-            Locale.getDefault().language.startsWith("zh")
-        } else {
-            initialLocales[0]?.language?.startsWith("zh") == true
-        }
-        if (!alreadyChinese) {
+        // Default language on first app open only: Chinese.
+        // If user has explicitly switched language before, keep their choice.
+        if (initialLocales.isEmpty) {
             AppCompatDelegate.setApplicationLocales(
                 LocaleListCompat.forLanguageTags("zh-CN")
             )
+            isChinese = true
+        } else {
+            isChinese = initialLocales[0]?.language?.startsWith("zh") == true
         }
-        isChinese = true
 
         val pending = Prefs.getString(context, PREF_PENDING_MAP_SWITCH).orEmpty()
         if (pending.isNotBlank()) {

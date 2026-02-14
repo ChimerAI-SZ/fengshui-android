@@ -27,6 +27,8 @@ fun GoogleMapView(
             MapView(context).apply {
                 onCreate(Bundle())
                 getMapAsync { gMap ->
+                    gMap.uiSettings.isRotateGesturesEnabled = true
+                    gMap.uiSettings.isTiltGesturesEnabled = true
                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialCenter, initialZoom))
                     onMapReady(gMap)
                 }

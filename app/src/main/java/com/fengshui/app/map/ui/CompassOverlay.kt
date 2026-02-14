@@ -184,24 +184,25 @@ fun CompassOverlay(
                     drawCircle(color = Color.White.copy(alpha = 0.97f), radius = shanRadius, style = Stroke(width = 2.2f))
                     drawCircle(color = Color.Black.copy(alpha = 0.9f), radius = shanRadius, style = Stroke(width = 1f))
 
-                    for (i in 0 until 24) {
+                    // Draw 24-shan axis lines as full diameters so they stay continuous through center.
+                    for (i in 0 until 12) {
                         val angle = Math.toRadians(((i * 15) - 90).toDouble())
-                        // Radial lines pass through center (from center ring to outer ring).
-                        val x1 = centerX + (holeRadius * 1.02f * cos(angle)).toFloat()
-                        val y1 = centerY + (holeRadius * 1.02f * sin(angle)).toFloat()
-                        val x2 = centerX + (radius * 0.79f * cos(angle)).toFloat()
-                        val y2 = centerY + (radius * 0.79f * sin(angle)).toFloat()
+                        val r = radius * 0.965f
+                        val x1 = centerX - (r * cos(angle)).toFloat()
+                        val y1 = centerY - (r * sin(angle)).toFloat()
+                        val x2 = centerX + (r * cos(angle)).toFloat()
+                        val y2 = centerY + (r * sin(angle)).toFloat()
                         drawLine(
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = Color.White.copy(alpha = 0.35f),
                             start = Offset(x1, y1),
                             end = Offset(x2, y2),
-                            strokeWidth = 1.6f
+                            strokeWidth = 1.2f
                         )
                         drawLine(
-                            color = Color.Black.copy(alpha = 0.55f),
+                            color = Color.Black.copy(alpha = 0.72f),
                             start = Offset(x1, y1),
                             end = Offset(x2, y2),
-                            strokeWidth = 0.9f
+                            strokeWidth = 1.0f
                         )
                     }
 
@@ -213,6 +214,22 @@ fun CompassOverlay(
                     drawCircle(color = Color.Black.copy(alpha = 0.82f), radius = baguaRadius, style = Stroke(width = 1f))
                     drawCircle(color = Color.Black.copy(alpha = 0.82f), radius = dirRadius, style = Stroke(width = 1f))
                     drawCircle(color = Color.Black.copy(alpha = 0.72f), radius = holeRadius, style = Stroke(width = 1f))
+
+                    // Repaint axis lines on top of rings to guarantee fully continuous center/edge visibility.
+                    for (i in 0 until 12) {
+                        val angle = Math.toRadians(((i * 15) - 90).toDouble())
+                        val r = radius * 0.965f
+                        val x1 = centerX - (r * cos(angle)).toFloat()
+                        val y1 = centerY - (r * sin(angle)).toFloat()
+                        val x2 = centerX + (r * cos(angle)).toFloat()
+                        val y2 = centerY + (r * sin(angle)).toFloat()
+                        drawLine(
+                            color = Color.Black.copy(alpha = 0.8f),
+                            start = Offset(x1, y1),
+                            end = Offset(x2, y2),
+                            strokeWidth = 1.0f
+                        )
+                    }
 
                     drawCircle(
                         color = Color.Black.copy(alpha = 0.9f),

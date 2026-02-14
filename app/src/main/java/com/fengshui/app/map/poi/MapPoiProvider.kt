@@ -23,7 +23,18 @@ interface MapPoiProvider {
      * 逆地理编码：坐标 -> 地址
      */
     suspend fun reverseGeocode(location: UniversalLatLng): String?
+
+    /**
+     * Last search stats for debugging typed/sector search pipeline.
+     */
+    fun lastSearchStats(): ProviderSearchStats? = null
 }
+
+data class ProviderSearchStats(
+    val rawCount: Int,
+    val typeFilteredCount: Int,
+    val debugStatus: String? = null
+)
 
 // 简单的数据模型
 data class PoiResult(

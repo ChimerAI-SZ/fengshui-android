@@ -8,8 +8,13 @@ import com.fengshui.app.data.LifeCirclePointType
 import com.fengshui.app.map.abstraction.UniversalLatLng
 import com.fengshui.app.map.poi.MapPoiProvider
 import com.fengshui.app.map.poi.PoiResult
+import com.fengshui.app.map.poi.AmapPoiProvider
+import com.fengshui.app.map.poi.GooglePlacesProvider
+import com.fengshui.app.map.poi.NominatimPoiProvider
+import com.fengshui.app.map.poi.PoiTypeMapper
 import com.fengshui.app.map.sector.SectorUtils
 import com.fengshui.app.map.ui.SectorConfig
+import com.fengshui.app.utils.RhumbLineUtils
 import kotlinx.coroutines.launch
 import android.os.SystemClock
 
@@ -117,6 +122,13 @@ class MapUiStateViewModel : ViewModel() {
         ui.sectorOrigin = origin
         ui.sectorConfigLabel = config.label
         ui.sectorLoading = true
+        ui.sectorFallbackUsed = false
+        ui.sectorDebugAmapRaw = 0
+        ui.sectorDebugGoogleRaw = 0
+        ui.sectorDebugTypeFiltered = 0
+        ui.sectorDebugSectorFiltered = 0
+        ui.sectorDebugAmapStatus = "-"
+        ui.sectorDebugGoogleStatus = "-"
         ui.sectorRadiusLimited = false
         ui.sectorEffectiveRadiusMeters = config.maxDistanceMeters.toInt()
 
@@ -128,24 +140,155 @@ class MapUiStateViewModel : ViewModel() {
                     ui.sectorRadiusLimited = true
                 }
 
-                var raw: List<PoiResult> = emptyList()
+                val allRaw = mutableListOf<PoiResult>()
+                val isTypedKeyword = PoiTypeMapper.isTypedCategoryKeyword(config.keyword)
                 for (provider in providers) {
-                    raw = provider.searchByKeyword(
+                    val raw = provider.searchByKeyword(
                         keyword = config.keyword,
                         location = origin,
                         radiusMeters = searchRadius
                     )
-                    if (raw.isNotEmpty()) break
+                    val stats = provider.lastSearchStats()
+                    when (provider) {
+                        is AmapPoiProvider -> {
+                            ui.sectorDebugAmapRaw += stats?.rawCount ?: raw.size
+                            ui.sectorDebugAmapStatus = stats?.debugStatus ?: "NO_STATS"
+                        }
+                        is GooglePlacesProvider -> {
+                            ui.sectorDebugGoogleRaw += stats?.rawCount ?: raw.size
+                            ui.sectorDebugGoogleStatus = stats?.debugStatus ?: "NO_STATS"
+                        }
+                    }
+                    if (stats != null) {
+                        ui.sectorDebugTypeFiltered += stats.typeFilteredCount
+                    } else {
+                        ui.sectorDebugTypeFiltered += raw.size
+                    }
+                    if (raw.isNotEmpty()) {
+                        allRaw.addAll(raw)
+                    }
                 }
-                val filtered = SectorUtils.filterPOIsInSector(
+                // Typed search fallback when map providers are unavailable/denied:
+                // use Nominatim with generalized category words to avoid hard zero.
+                if (allRaw.isEmpty() && isTypedKeyword) {
+                    val nominatim = NominatimPoiProvider()
+                    val fallbackQueries = buildList {
+                        add(config.keyword)
+                        when {
+                            config.keyword.contains("住宅") || config.keyword.contains("小区") || config.keyword.contains("residence", ignoreCase = true) -> {
+                                add("residential")
+                                add("apartment")
+                                add("housing")
+                            }
+                            config.keyword.contains("医院") || config.keyword.contains("hospital", ignoreCase = true) -> {
+                                add("hospital")
+                                add("clinic")
+                            }
+                            config.keyword.contains("大厦") || config.keyword.contains("写字楼") || config.keyword.contains("office", ignoreCase = true) || config.keyword.contains("building", ignoreCase = true) -> {
+                                add("office")
+                                add("building")
+                                add("tower")
+                            }
+                        }
+                    }.distinct()
+                    for (q in fallbackQueries) {
+                        val raw = nominatim.searchByKeyword(
+                            keyword = q,
+                            location = origin,
+                            radiusMeters = searchRadius
+                        )
+                        if (raw.isNotEmpty()) {
+                            allRaw.addAll(raw)
+                            break
+                        }
+                    }
+                }
+                // If radius-bounded lookup misses, retry once without radius limits.
+                if (allRaw.isEmpty()) {
+                    for (provider in providers) {
+                        val raw = provider.searchByKeyword(
+                            keyword = config.keyword,
+                            location = origin,
+                            radiusMeters = 0
+                        )
+                        val stats = provider.lastSearchStats()
+                        when (provider) {
+                            is AmapPoiProvider -> {
+                                ui.sectorDebugAmapRaw += stats?.rawCount ?: raw.size
+                            }
+                            is GooglePlacesProvider -> {
+                                ui.sectorDebugGoogleRaw += stats?.rawCount ?: raw.size
+                            }
+                        }
+                        if (stats != null) {
+                            ui.sectorDebugTypeFiltered += stats.typeFilteredCount
+                        } else {
+                            ui.sectorDebugTypeFiltered += raw.size
+                        }
+                        if (raw.isNotEmpty()) {
+                            allRaw.addAll(raw)
+                        }
+                    }
+                }
+                val raw = allRaw
+                    .distinctBy {
+                        val lat = String.format("%.5f", it.lat)
+                        val lng = String.format("%.5f", it.lng)
+                        "${it.provider}|${it.name}|$lat|$lng"
+                    }
+
+                var filtered = SectorUtils.filterPOIsInSector(
                     origin = origin,
                     pois = raw,
                     startAngle = config.startAngle,
                     endAngle = config.endAngle,
                     maxDistanceMeters = searchRadius.toFloat()
                 )
+                // Robust fallback: tolerate coordinate-system mismatch and narrow-sector misses.
+                if (filtered.isEmpty() && raw.isNotEmpty()) {
+                    filtered = SectorUtils.filterPOIsInSector(
+                        origin = origin,
+                        pois = raw,
+                        startAngle = config.startAngle,
+                        endAngle = config.endAngle,
+                        maxDistanceMeters = searchRadius.toFloat(),
+                        bearingOffsetDegrees = 180f
+                    )
+                }
+                if (filtered.isEmpty() && raw.isNotEmpty()) {
+                    filtered = SectorUtils.filterPOIsInSector(
+                        origin = origin,
+                        pois = raw,
+                        startAngle = config.startAngle,
+                        endAngle = config.endAngle,
+                        maxDistanceMeters = searchRadius.toFloat(),
+                        angleToleranceDegrees = 12f
+                    )
+                }
+                if (filtered.isEmpty() && raw.isNotEmpty()) {
+                    filtered = SectorUtils.filterPOIsInSector(
+                        origin = origin,
+                        pois = raw,
+                        startAngle = config.startAngle,
+                        endAngle = config.endAngle,
+                        maxDistanceMeters = searchRadius.toFloat(),
+                        bearingOffsetDegrees = 180f,
+                        angleToleranceDegrees = 12f
+                    )
+                }
+                if (filtered.isEmpty() && raw.isNotEmpty()) {
+                    // Last-resort fallback: show nearest usable results so user can still operate.
+                    filtered = raw.sortedBy {
+                        RhumbLineUtils.calculateRhumbDistance(
+                            origin,
+                            UniversalLatLng(it.lat, it.lng)
+                        )
+                    }.take(50)
+                    ui.sectorFallbackUsed = true
+                }
                 val maxPoiCount = 50
                 val trimmed = filtered.take(maxPoiCount)
+                ui.sectorDebugSectorFiltered = filtered.size
 
                 ui.sectorResults.clear()
                 ui.sectorResults.addAll(trimmed)
