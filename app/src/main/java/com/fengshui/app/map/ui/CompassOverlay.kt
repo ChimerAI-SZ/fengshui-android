@@ -19,8 +19,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.geometry.Offset as UiOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.cos
@@ -59,6 +61,15 @@ fun CompassOverlay(
     )
     
     val baGuaNames = arrayOf("坎", "艮", "震", "巽", "离", "坤", "兑", "乾")
+    fun inwardReadableRotation(angleDeg: Float): Float {
+        // Inward radial orientation.
+        var rotation = angleDeg - 90f
+        // Keep lower-half labels upright/readable.
+        if (angleDeg > 90f && angleDeg < 270f) {
+            rotation += 180f
+        }
+        return rotation
+    }
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         // 主罗盘
@@ -81,7 +92,13 @@ fun CompassOverlay(
                     val radius = size.minDimension / 2f
                     val holeRadius = with(density) { centerHoleRadiusDp.toPx() }
 
+                    drawCircle(color = Color.White, radius = radius, style = Stroke(width = 2.8f))
                     drawCircle(color = Color.Black, radius = radius, style = Stroke(width = 1.4f))
+                    // subtle readable ring behind degree labels
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.22f),
+                        radius = radius * 0.90f
+                    )
 
                     for (deg in 0 until 360 step 5) {
                         val angle = Math.toRadians((deg - 90).toDouble())
@@ -91,35 +108,58 @@ fun CompassOverlay(
                         val y1 = centerY + (outerRadius * sin(angle)).toFloat()
                         val x2 = centerX + (innerRadius * cos(angle)).toFloat()
                         val y2 = centerY + (innerRadius * sin(angle)).toFloat()
+                        val blackWidth = if (deg % 10 == 0) 1.45f else 0.75f
+                        drawLine(
+                            color = Color.White.copy(alpha = if (deg % 10 == 0) 0.98f else 0.85f),
+                            start = Offset(x1, y1),
+                            end = Offset(x2, y2),
+                            strokeWidth = blackWidth + if (deg % 10 == 0) 1.2f else 0.7f
+                        )
                         drawLine(
                             color = Color.Black.copy(alpha = if (deg % 10 == 0) 1.0f else 0.78f),
                             start = Offset(x1, y1),
                             end = Offset(x2, y2),
-                            strokeWidth = if (deg % 10 == 0) 1.2f else 0.85f
+                            strokeWidth = blackWidth
                         )
                     }
 
-                    val degreePaint = android.graphics.Paint().apply {
+                    val degreeStrokePaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.WHITE
+                        textSize = with(density) { 10.sp.toPx() }
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isAntiAlias = true
+                        isFakeBoldText = true
+                        style = android.graphics.Paint.Style.STROKE
+                        strokeWidth = with(density) { 1.8.dp.toPx() }
+                    }
+                    val degreeFillPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.BLACK
-                        textSize = with(density) { 9.sp.toPx() }
+                        textSize = with(density) { 10.sp.toPx() }
                         textAlign = android.graphics.Paint.Align.CENTER
                         isAntiAlias = true
                         isFakeBoldText = true
                     }
                     val labelRadius = radius * 0.90f
-                    for (deg in 0 until 360 step 10) {
+                    for (deg in 0 until 360 step 20) {
                         val angle = Math.toRadians((deg - 90).toDouble())
                         val tx = centerX + (labelRadius * cos(angle)).toFloat()
                         val ty = centerY + (labelRadius * sin(angle)).toFloat()
                         drawContext.canvas.nativeCanvas.drawText(
                             deg.toString(),
                             tx,
-                            ty + degreePaint.textSize / 3f,
-                            degreePaint
+                            ty + degreeFillPaint.textSize / 3f,
+                            degreeStrokePaint
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            deg.toString(),
+                            tx,
+                            ty + degreeFillPaint.textSize / 3f,
+                            degreeFillPaint
                         )
                     }
 
                     val shanRadius = radius * 0.70f
+                    drawCircle(color = Color.White.copy(alpha = 0.97f), radius = shanRadius, style = Stroke(width = 2.2f))
                     drawCircle(color = Color.Black.copy(alpha = 0.9f), radius = shanRadius, style = Stroke(width = 1f))
 
                     for (i in 0 until 24) {
@@ -128,6 +168,12 @@ fun CompassOverlay(
                         val y1 = centerY + (radius * 0.57f * sin(angle)).toFloat()
                         val x2 = centerX + (radius * 0.79f * cos(angle)).toFloat()
                         val y2 = centerY + (radius * 0.79f * sin(angle)).toFloat()
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.9f),
+                            start = Offset(x1, y1),
+                            end = Offset(x2, y2),
+                            strokeWidth = 1.6f
+                        )
                         drawLine(
                             color = Color.Black.copy(alpha = 0.55f),
                             start = Offset(x1, y1),
@@ -138,6 +184,9 @@ fun CompassOverlay(
 
                     val baguaRadius = radius * 0.52f
                     val dirRadius = radius * 0.40f
+                    drawCircle(color = Color.White.copy(alpha = 0.95f), radius = baguaRadius, style = Stroke(width = 2.0f))
+                    drawCircle(color = Color.White.copy(alpha = 0.95f), radius = dirRadius, style = Stroke(width = 2.0f))
+                    drawCircle(color = Color.White.copy(alpha = 0.9f), radius = holeRadius, style = Stroke(width = 1.8f))
                     drawCircle(color = Color.Black.copy(alpha = 0.82f), radius = baguaRadius, style = Stroke(width = 1f))
                     drawCircle(color = Color.Black.copy(alpha = 0.82f), radius = dirRadius, style = Stroke(width = 1f))
                     drawCircle(color = Color.Black.copy(alpha = 0.72f), radius = holeRadius, style = Stroke(width = 1f))
@@ -158,8 +207,7 @@ fun CompassOverlay(
                     val radiusPx = if (i % 3 == 0) radiusBase * 0.64f else radiusBase * 0.60f
                     val offsetX = radiusPx * cos(angleRad).toFloat()
                     val offsetY = radiusPx * sin(angleRad).toFloat()
-                    // Radially inward orientation.
-                    val textRotation = angleDeg - 90f
+                    val textRotation = inwardReadableRotation((angleDeg + 360f) % 360f)
 
                     Box(
                         modifier = Modifier
@@ -171,9 +219,16 @@ fun CompassOverlay(
                     ) {
                         Text(
                             text = shanNames[i],
-                            fontSize = if (i % 3 == 0) 13.sp else 10.sp,
+                            fontSize = if (i % 3 == 0) 14.sp else 11.sp,
                             fontWeight = if (i % 3 == 0) FontWeight.Bold else FontWeight.Normal,
-                            style = TextStyle(color = if (i % 3 == 0) Color(0xFFB31212) else Color.Black),
+                            style = TextStyle(
+                                color = if (i % 3 == 0) Color(0xFFB31212) else Color.Black,
+                                shadow = Shadow(
+                                    color = Color.White,
+                                    offset = UiOffset(0f, 0f),
+                                    blurRadius = 2.8f
+                                )
+                            ),
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
@@ -185,8 +240,7 @@ fun CompassOverlay(
                     val radiusPx = radiusBase * 0.48f
                     val offsetX = radiusPx * cos(angleRad).toFloat()
                     val offsetY = radiusPx * sin(angleRad).toFloat()
-                    // Radially inward orientation.
-                    val textRotation = angleDeg - 90f
+                    val textRotation = inwardReadableRotation((angleDeg + 360f) % 360f)
 
                     Box(
                         modifier = Modifier
@@ -200,7 +254,14 @@ fun CompassOverlay(
                             text = baGuaNames[i],
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            style = TextStyle(color = Color.Black),
+                            style = TextStyle(
+                                color = Color.Black,
+                                shadow = Shadow(
+                                    color = Color.White,
+                                    offset = UiOffset(0f, 0f),
+                                    blurRadius = 2.8f
+                                )
+                            ),
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }

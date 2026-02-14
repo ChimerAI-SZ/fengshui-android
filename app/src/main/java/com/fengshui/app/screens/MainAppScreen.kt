@@ -15,6 +15,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,10 +41,14 @@ import com.fengshui.app.screens.SearchScreen
 import com.fengshui.app.screens.InfoScreen
 import com.fengshui.app.R
 import com.fengshui.app.utils.ApiKeyConfig
+import com.fengshui.app.utils.Prefs
 import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * MainAppScreen - 主应用界面
@@ -63,16 +68,19 @@ import com.google.android.gms.common.GoogleApiAvailability
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppScreen(modifier: Modifier = Modifier) {
+    val PREF_PENDING_MAP_SWITCH = "pending_map_switch_after_locale"
     var currentTab by remember { mutableStateOf(NavigationItem.MAP) }
     var quickAddCaseId by remember { mutableStateOf<String?>(null) }
     var searchFocus by remember { mutableStateOf<UniversalLatLng?>(null) }
-    var showUnsupportedMapDialog by remember { mutableStateOf(false) }
+    var showLanguageMapConfirmDialog by remember { mutableStateOf(false) }
+    var showMapSwitchConfirmDialog by remember { mutableStateOf(false) }
     var showLanguageOnlyConfirmDialog by remember { mutableStateOf(false) }
     var pendingIsChinese by remember { mutableStateOf(false) }
     var pendingLanguageTag by remember { mutableStateOf("en") }
     var pendingTargetProvider by remember { mutableStateOf(MapProviderType.AMAP) }
     var pendingUnsupportedReason by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
     val amapKey = ApiKeyConfig.getAmapApiKey(context)
     val hasGoogleMapKey = ApiKeyConfig.isValidKey(googleKey)
@@ -98,11 +106,30 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         )
     }
 
+    LaunchedEffect(Unit) {
+        val pending = Prefs.getString(context, PREF_PENDING_MAP_SWITCH).orEmpty()
+        if (pending.isNotBlank()) {
+            runCatching { MapProviderType.valueOf(pending) }
+                .getOrNull()
+                ?.let { target ->
+                    mapProviderTypeName = target.name
+                }
+            Prefs.saveString(context, PREF_PENDING_MAP_SWITCH, "")
+        }
+    }
+
     fun applyLanguageOnly() {
-        isChinese = pendingIsChinese
-        AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(pendingLanguageTag)
-        )
+        // Avoid map SDK teardown/re-init during locale recreation on some devices.
+        if (currentTab == NavigationItem.MAP) {
+            currentTab = NavigationItem.INFO
+        }
+        scope.launch {
+            delay(120)
+            isChinese = pendingIsChinese
+            AppCompatDelegate.setApplicationLocales(
+                LocaleListCompat.forLanguageTags(pendingLanguageTag)
+            )
+        }
     }
 
     fun isProviderAvailable(providerType: MapProviderType): Boolean {
@@ -137,18 +164,30 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         pendingIsChinese = nextChinese
         pendingLanguageTag = languageTag
         pendingTargetProvider = if (nextChinese) MapProviderType.AMAP else MapProviderType.GOOGLE
-
-        if (mapProviderType == pendingTargetProvider) {
-            applyLanguageOnly()
-            return
+        pendingUnsupportedReason = when {
+            mapProviderType == pendingTargetProvider -> "当前地图已是目标地图"
+            isProviderAvailable(pendingTargetProvider) -> ""
+            else -> providerUnsupportedReason(pendingTargetProvider)
         }
+        showLanguageMapConfirmDialog = true
+    }
 
-        if (isProviderAvailable(pendingTargetProvider)) {
-            mapProviderTypeName = pendingTargetProvider.name
-            applyLanguageOnly()
-        } else {
-            pendingUnsupportedReason = providerUnsupportedReason(pendingTargetProvider)
-            showUnsupportedMapDialog = true
+    fun requestMapSwitchOnly(targetProvider: MapProviderType) {
+        if (mapProviderType == targetProvider) return
+        pendingTargetProvider = targetProvider
+        pendingUnsupportedReason = if (isProviderAvailable(targetProvider)) "" else providerUnsupportedReason(targetProvider)
+        showMapSwitchConfirmDialog = true
+    }
+
+    fun applyMapSwitchSafely(targetProvider: MapProviderType) {
+        if (currentTab == NavigationItem.MAP) {
+            currentTab = NavigationItem.INFO
+        }
+        scope.launch {
+            delay(120)
+            mapProviderTypeName = targetProvider.name
+            delay(120)
+            currentTab = NavigationItem.MAP
         }
     }
 
@@ -203,13 +242,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         hasGoogleMap = hasGoogleMapKey,
                         hasAmapMap = hasAmapKey,
                         onMapProviderSwitch = { targetType ->
-                            val targetAvailable = when (targetType) {
-                                MapProviderType.GOOGLE -> hasGoogleMapKey
-                                MapProviderType.AMAP -> hasAmapKey
-                            }
-                            if (targetAvailable && mapProviderType != targetType) {
-                                mapProviderTypeName = targetType.name
-                            }
+                            requestMapSwitchOnly(targetType)
                         },
                         modifier = Modifier.fillMaxSize(),
                         quickAddCaseId = quickAddCaseId,
@@ -246,38 +279,98 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    if (showUnsupportedMapDialog) {
+    if (showLanguageMapConfirmDialog) {
         val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) "高德地图" else "Google 地图"
+        val mapAlreadyMatched = pendingUnsupportedReason == "当前地图已是目标地图"
+        val mapSwitchSupported = pendingUnsupportedReason.isBlank()
+        val riskText = if (mapSwitchSupported) {
+            "语言切换将联动切换到 $providerLabel。若当前设备/网络环境不支持，可能会闪退。"
+        } else if (mapAlreadyMatched) {
+            "当前地图已是 $providerLabel，本次仅切换语言。"
+        } else {
+            "当前环境不支持 $providerLabel（$pendingUnsupportedReason），若强行切换可能会闪退。"
+        }
         AlertDialog(
-            onDismissRequest = { showUnsupportedMapDialog = false },
+            onDismissRequest = { showLanguageMapConfirmDialog = false },
             title = { Text("地图切换确认") },
             text = {
                 Text(
-                    "当前环境可能不支持 $providerLabel（$pendingUnsupportedReason），继续切换可能闪退。\n\n" +
+                    "$riskText\n\n" +
                         "你可以选择：\n" +
-                        "1) 仍然切换地图并执行语言切换\n" +
-                        "2) 只切换语言，不切换地图"
+                        "1) 仅切换语言（推荐）\n" +
+                        "2) 语言+地图一起切换（仅在支持时可用）"
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        mapProviderTypeName = pendingTargetProvider.name
                         applyLanguageOnly()
-                        showUnsupportedMapDialog = false
+                        showLanguageMapConfirmDialog = false
                     }
                 ) {
-                    Text("确认切换地图")
+                    Text("仅切换语言（推荐）")
+                }
+            },
+            dismissButton = {
+                if (mapSwitchSupported) {
+                    TextButton(
+                        onClick = {
+                            // Defer provider switch until after locale recreation to prevent crash.
+                            Prefs.saveString(context, PREF_PENDING_MAP_SWITCH, pendingTargetProvider.name)
+                            applyLanguageOnly()
+                            showLanguageMapConfirmDialog = false
+                        }
+                    ) {
+                        Text("语言+地图一起切换")
+                    }
+                } else if (mapAlreadyMatched) {
+                    TextButton(
+                        onClick = {
+                            applyLanguageOnly()
+                            showLanguageMapConfirmDialog = false
+                        }
+                    ) {
+                        Text("仅切换语言")
+                    }
+                } else {
+                    TextButton(
+                        onClick = {
+                            showLanguageMapConfirmDialog = false
+                        }
+                    ) {
+                        Text("关闭")
+                    }
+                }
+            }
+        )
+    }
+
+    if (showMapSwitchConfirmDialog) {
+        val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) "高德地图" else "Google 地图"
+        val riskText = if (pendingUnsupportedReason.isBlank()) {
+            "即将切换到 $providerLabel。若当前设备/地区/网络环境不支持，可能导致闪退。"
+        } else {
+            "当前环境可能不支持 $providerLabel（$pendingUnsupportedReason），继续切换可能导致闪退。"
+        }
+        AlertDialog(
+            onDismissRequest = { showMapSwitchConfirmDialog = false },
+            title = { Text("地图切换风险提示") },
+            text = { Text("$riskText\n\n是否继续执行地图切换？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        applyMapSwitchSafely(pendingTargetProvider)
+                        showMapSwitchConfirmDialog = false
+                    }
+                ) {
+                    Text("确认切换")
                 }
             },
             dismissButton = {
                 TextButton(
-                    onClick = {
-                        showUnsupportedMapDialog = false
-                        showLanguageOnlyConfirmDialog = true
-                    }
+                    onClick = { showMapSwitchConfirmDialog = false }
                 ) {
-                    Text("仅切换语言")
+                    Text("取消")
                 }
             }
         )
