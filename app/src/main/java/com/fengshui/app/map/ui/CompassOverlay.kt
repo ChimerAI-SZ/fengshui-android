@@ -64,7 +64,6 @@ fun CompassOverlay(
     )
     
     val baGuaNames = arrayOf("坎", "艮", "震", "巽", "离", "坤", "兑", "乾")
-    val directions = arrayOf("N", "E", "S", "W")
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         // 主罗盘
@@ -72,7 +71,8 @@ fun CompassOverlay(
             modifier = Modifier
                 .size(compassSize)
                 .shadow(elevation = 8.dp, shape = CircleShape)
-                .background(Color(0xFFFBF7F0).copy(alpha = 0.15f), shape = CircleShape),
+                // Semi-opaque neutral background to separate compass from map.
+                .background(Color(0xF0F3F4F6), shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
             // 罗盘主体 Canvas
@@ -85,16 +85,16 @@ fun CompassOverlay(
                 // ========== 外圈：360度标注 ==========
                 // 外圆边框
                 drawCircle(
-                    color = Color(0xFF999999).copy(alpha = 0.2f),
+                    color = Color(0xFF6E6E6E).copy(alpha = 0.55f),
                     radius = radius,
                     style = Stroke(width = 2f)
                 )
 
-                // 度数刻度（每10度一个）
-                for (deg in 0 until 360 step 10) {
+                // 度数刻度：5°短刻度，10°长刻度，类似传统罗盘外圈
+                for (deg in 0 until 360 step 5) {
                     val angle = Math.toRadians((deg - 90).toDouble())
-                    val outerRadius = radius * 0.95f
-                    val innerRadius = radius * 0.88f
+                    val outerRadius = radius * 0.97f
+                    val innerRadius = if (deg % 10 == 0) radius * 0.87f else radius * 0.91f
                     
                     val x1 = centerX + (outerRadius * cos(angle)).toFloat()
                     val y1 = centerY + (outerRadius * sin(angle)).toFloat()
@@ -102,25 +102,23 @@ fun CompassOverlay(
                     val y2 = centerY + (innerRadius * sin(angle)).toFloat()
                     
                     drawLine(
-                        color = Color(0xFF666666).copy(alpha = 0.25f),
+                        color = Color(0xFF444444).copy(alpha = if (deg % 10 == 0) 0.5f else 0.35f),
                         start = Offset(x1, y1),
                         end = Offset(x2, y2),
-                        strokeWidth = 1.5f
+                        strokeWidth = if (deg % 10 == 0) 1.35f else 0.95f
                     )
                 }
 
-                // 外圈角度数字（每30度一个）
+                // 外圈角度数字（每10度一个）
                 val textPaint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.BLACK
-                    textSize = with(density) { 10.sp.toPx() }
+                    color = android.graphics.Color.argb(220, 20, 20, 20)
+                    textSize = with(density) { 9.sp.toPx() }
                     textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true
+                    isFakeBoldText = true
                 }
-                val labelRadius = radius * 0.86f
-                for (deg in 0 until 360 step 30) {
-                    if (deg == 0 || deg == 90 || deg == 180 || deg == 270) {
-                        continue
-                    }
+                val labelRadius = radius * 0.83f
+                for (deg in 0 until 360 step 10) {
                     val angle = Math.toRadians((deg - 90).toDouble())
                     val tx = centerX + (labelRadius * cos(angle)).toFloat()
                     val ty = centerY + (labelRadius * sin(angle)).toFloat()
@@ -131,7 +129,7 @@ fun CompassOverlay(
                 // ========== 24山圈 ==========
                 val shanRadius = radius * 0.70f
                 drawCircle(
-                    color = Color(0xFFE8E8E8).copy(alpha = 0.15f),
+                    color = Color(0xFF9A9A9A).copy(alpha = 0.45f),
                     radius = shanRadius,
                     style = Stroke(width = 1f)
                 )
@@ -147,17 +145,17 @@ fun CompassOverlay(
                     val y2 = centerY + (radius * 0.75f * sin(angle1)).toFloat()
                     
                     drawLine(
-                        color = Color(0xFFCCCCCC).copy(alpha = 0.2f),
+                        color = Color(0xFF8C8C8C).copy(alpha = 0.45f),
                         start = Offset(x1, y1),
                         end = Offset(x2, y2),
-                        strokeWidth = 1f
+                        strokeWidth = 0.9f
                     )
                 }
 
                 // ========== 8卦圈 ==========
                 val baguaRadius = radius * 0.52f
                 drawCircle(
-                    color = Color(0xFFD0D0D0).copy(alpha = 0.2f),
+                    color = Color(0xFF8A8A8A).copy(alpha = 0.45f),
                     radius = baguaRadius,
                     style = Stroke(width = 1f)
                 )
@@ -165,7 +163,7 @@ fun CompassOverlay(
                 // ========== 方向圈 ==========
                 val dirRadius = radius * 0.40f
                 drawCircle(
-                    color = Color(0xFFDCDCDC).copy(alpha = 0.2f),
+                    color = Color(0xFF8A8A8A).copy(alpha = 0.45f),
                     radius = dirRadius,
                     style = Stroke(width = 1f)
                 )
@@ -194,14 +192,14 @@ fun CompassOverlay(
 
                 // 蓝色圆圈（当前位置指示）
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.2f),
+                    color = Color.White.copy(alpha = 0.45f),
                     radius = dirRadius * 0.6f,
                     style = Stroke(width = 2f)
                 )
                 drawCircle(
-                    color = Color.Blue.copy(alpha = 0.35f),
+                    color = Color(0xFF2D55A0).copy(alpha = 0.55f),
                     radius = dirRadius * 0.55f,
-                    style = Stroke(width = 2f)
+                    style = Stroke(width = 1.6f)
                 )
             }
 
@@ -229,7 +227,7 @@ fun CompassOverlay(
                         text = shanNames[i],
                         fontSize = if (i % 3 == 0) 11.sp else 10.sp,
                         fontWeight = if (i % 3 == 0) FontWeight.Bold else FontWeight.Normal,
-                        style = TextStyle(color = if (i % 3 == 0) Color.Red else Color.Black),
+                        style = TextStyle(color = if (i % 3 == 0) Color(0xFF9E1E1E) else Color(0xFF202020)),
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -248,18 +246,14 @@ fun CompassOverlay(
                     modifier = Modifier
                         .size(28.dp)
                         .align(Alignment.Center)
-                        .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp)
-                        .background(
-                            color = getBaGuaColor(i).copy(alpha = 0.45f),
-                            shape = CircleShape
-                        ),
+                        .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = baGuaNames[i],
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        style = TextStyle(color = Color.White),
+                        style = TextStyle(color = Color(0xFF111111)),
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -293,10 +287,10 @@ fun CompassOverlay(
                 
                 // 上指针（红色）
                 drawLine(
-                    color = Color.Red,
+                    color = Color(0xFFD72020),
                     start = Offset(cx, cy),
                     end = Offset(cx, cy - needleLength),
-                    strokeWidth = 5.5f,
+                    strokeWidth = 4.6f,
                     cap = StrokeCap.Round
                 )
 
@@ -306,15 +300,15 @@ fun CompassOverlay(
                     lineTo(cx + arrowSize, cy - needleLength + arrowSize * 1.4f)
                     close()
                 }
-                drawPath(color = Color(0xFF8E1B1B), path = arrowPath, style = Stroke(width = 2f))
-                drawPath(color = Color.Red, path = arrowPath)
+                drawPath(color = Color(0xFF8E1B1B), path = arrowPath, style = Stroke(width = 1.4f))
+                drawPath(color = Color(0xFFD72020), path = arrowPath)
                 
                 // 下指针（黑色）
                 drawLine(
-                    color = Color.Black,
+                    color = Color(0xFF222222),
                     start = Offset(cx, cy),
                     end = Offset(cx, cy + needleLength * 0.25f),
-                    strokeWidth = 3f,
+                    strokeWidth = 2.4f,
                     cap = StrokeCap.Round
                 )
                 
@@ -328,7 +322,7 @@ fun CompassOverlay(
             // 信息显示区（方位角和坐标）
             Box(
                 modifier = Modifier
-                    .background(Color(0xFFFFF9C4), shape = CircleShape)
+                    .background(Color(0xF3FFFFFF), shape = CircleShape)
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -352,21 +346,5 @@ fun CompassOverlay(
                 }
             }
         }
-    }
-}
-
-/**
- * 获取八卦对应的颜色
- */
-private fun getBaGuaColor(index: Int): Color {
-    return when (index % 8) {
-        0 -> Color(0xFF1976D2)  // 坎 - 蓝色（水）
-        1 -> Color(0xFF8B4513)  // 艮 - 棕色（土）
-        2 -> Color(0xFF4CAF50)  // 震 - 绿色（木）
-        3 -> Color(0xFF8BC34A)  // 巽 - 浅绿（木）
-        4 -> Color(0xFFFF5722)  // 离 - 红色（火）
-        5 -> Color(0xFFDCAB6F)  // 坤 - 土色（土）
-        6 -> Color(0xFFFFC107)  // 兑 - 金色（金）
-        else -> Color(0xFF9C27B0) // 乾 - 紫色（金）
     }
 }
