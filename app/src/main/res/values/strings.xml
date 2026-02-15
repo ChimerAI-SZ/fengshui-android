@@ -219,6 +219,7 @@
     <string name="save_to_case">Save to "%1$s"</string>
 
     <string name="provider_google_places">Google Places</string>
+    <string name="provider_google_map_full">Google Maps</string>
     <string name="provider_google_map_short">Google</string>
     <string name="provider_amap">Amap</string>
     <string name="provider_amap_short">Amap</string>
@@ -256,4 +257,22 @@
     <string name="add_point_name_label">Point name</string>
     <string name="rename_point_title">Rename point</string>
     <string name="rename_point_label">New name</string>
+
+    <string name="map_switch_title">Map Switch Confirmation</string>
+    <string name="map_switch_risk_title">Map Switch Risk Notice</string>
+    <string name="map_switch_execute_title">Execution Confirmation</string>
+    <string name="map_switch_risk_supported">Changing language will also switch to %1$s. If unsupported by this device/network/region, the app may crash.</string>
+    <string name="map_switch_risk_already_matched">Current map is already %1$s. This will switch language only.</string>
+    <string name="map_switch_risk_unsupported">Current environment may not support %1$s (%2$s). Forcing switch may cause a crash.</string>
+    <string name="map_switch_language_dialog_options">You can choose:\n1) Language only (recommended)\n2) Language + map (only when supported)</string>
+    <string name="map_switch_risk_go">Switching to %1$s. If unsupported by device/region/network, the app may crash.</string>
+    <string name="map_switch_risk_go_with_reason">Current environment may not support %1$s (%2$s). Continuing may cause a crash.</string>
+    <string name="map_switch_continue_question">Continue map switching?</string>
+    <string name="map_switch_button_lang_only_recommended">Language only (Recommended)</string>
+    <string name="map_switch_button_lang_plus_map">Language + Map</string>
+    <string name="map_switch_button_lang_only">Language only</string>
+    <string name="map_switch_button_confirm">Confirm switch</string>
+    <string name="map_switch_button_continue">Continue</string>
+    <string name="map_switch_language_only_confirm">Switch language only, keep current map. Continue?</string>
+    <string name="ar_info_bagua_wuxing">Bagua: %1$s  Wuxing: %2$s</string>
 </resources>

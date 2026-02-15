@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.fengshui.app.R
+import com.fengshui.app.utils.RhumbLineUtils
 import com.fengshui.app.utils.SensorHelper
 
 @SuppressLint("MissingPermission")
@@ -43,9 +45,13 @@ fun ArCompassOverlay(
     onCameraOpenError: () -> Unit
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var azimuthDegrees by remember { mutableStateOf(0f) }
     val heading = ((azimuthDegrees % 360f) + 360f) % 360f
+    val isChinese = configuration.locales[0]?.language?.startsWith("zh") == true
+    val bagua = localizeBaGuaLabel(RhumbLineUtils.getBaGua(heading), isChinese)
+    val wuxing = localizeWuXingLabel(RhumbLineUtils.getWuXing(heading), isChinese)
 
     val sensorHelper = remember {
         SensorHelper(context) { degree ->
@@ -121,6 +127,11 @@ fun ArCompassOverlay(
                     fontSize = 12.sp
                 )
                 Text(
+                    text = stringResource(id = R.string.ar_info_bagua_wuxing, bagua, wuxing),
+                    color = Color.White,
+                    fontSize = 12.sp
+                )
+                Text(
                     text = stringResource(id = R.string.ar_info_tip),
                     color = Color(0xFFE0E0E0),
                     fontSize = 11.sp
@@ -149,5 +160,32 @@ fun ArCompassOverlay(
         ) {
             Text(stringResource(id = R.string.action_exit_ar))
         }
+    }
+}
+
+private fun localizeBaGuaLabel(label: String, isChinese: Boolean): String {
+    if (isChinese) return label
+    return when (label) {
+        "坎" -> "Kan"
+        "艮" -> "Gen"
+        "震" -> "Zhen"
+        "巽" -> "Xun"
+        "离" -> "Li"
+        "坤" -> "Kun"
+        "兑" -> "Dui"
+        "乾" -> "Qian"
+        else -> label
+    }
+}
+
+private fun localizeWuXingLabel(label: String, isChinese: Boolean): String {
+    if (isChinese) return label
+    return when (label) {
+        "金" -> "Metal"
+        "木" -> "Wood"
+        "水" -> "Water"
+        "火" -> "Fire"
+        "土" -> "Earth"
+        else -> label
     }
 }

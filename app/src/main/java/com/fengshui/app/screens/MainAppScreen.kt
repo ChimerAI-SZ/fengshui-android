@@ -305,25 +305,30 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     }
 
     if (showLanguageMapConfirmDialog) {
-        val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) "高德地图" else "Google 地图"
+        val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) {
+            stringResource(id = R.string.provider_amap)
+        } else {
+            stringResource(id = R.string.provider_google_map_full)
+        }
         val mapAlreadyMatched = pendingUnsupportedReason == "当前地图已是目标地图"
         val mapSwitchSupported = pendingUnsupportedReason.isBlank()
         val riskText = if (mapSwitchSupported) {
-            "语言切换将联动切换到 $providerLabel。若当前设备/网络环境不支持，可能会闪退。"
+            stringResource(id = R.string.map_switch_risk_supported, providerLabel)
         } else if (mapAlreadyMatched) {
-            "当前地图已是 $providerLabel，本次仅切换语言。"
+            stringResource(id = R.string.map_switch_risk_already_matched, providerLabel)
         } else {
-            "当前环境不支持 $providerLabel（$pendingUnsupportedReason），若强行切换可能会闪退。"
+            stringResource(
+                id = R.string.map_switch_risk_unsupported,
+                providerLabel,
+                pendingUnsupportedReason
+            )
         }
         AlertDialog(
             onDismissRequest = { showLanguageMapConfirmDialog = false },
-            title = { Text("地图切换确认") },
+            title = { Text(stringResource(id = R.string.map_switch_title)) },
             text = {
                 Text(
-                    "$riskText\n\n" +
-                        "你可以选择：\n" +
-                        "1) 仅切换语言（推荐）\n" +
-                        "2) 语言+地图一起切换（仅在支持时可用）"
+                    "$riskText\n\n${stringResource(id = R.string.map_switch_language_dialog_options)}"
                 )
             },
             confirmButton = {
@@ -334,7 +339,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         showLanguageMapConfirmDialog = false
                     }
                 ) {
-                    Text("仅切换语言（推荐）")
+                    Text(stringResource(id = R.string.map_switch_button_lang_only_recommended))
                 }
             },
             dismissButton = {
@@ -348,7 +353,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                             showLanguageMapConfirmDialog = false
                         }
                     ) {
-                        Text("语言+地图一起切换")
+                        Text(stringResource(id = R.string.map_switch_button_lang_plus_map))
                     }
                 } else if (mapAlreadyMatched) {
                     TextButton(
@@ -357,7 +362,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                             showLanguageMapConfirmDialog = false
                         }
                     ) {
-                        Text("仅切换语言")
+                        Text(stringResource(id = R.string.map_switch_button_lang_only))
                     }
                 } else {
                     TextButton(
@@ -373,16 +378,26 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     }
 
     if (showMapSwitchConfirmDialog) {
-        val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) "高德地图" else "Google 地图"
-        val riskText = if (pendingUnsupportedReason.isBlank()) {
-            "即将切换到 $providerLabel。若当前设备/地区/网络环境不支持，可能导致闪退。"
+        val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) {
+            stringResource(id = R.string.provider_amap)
         } else {
-            "当前环境可能不支持 $providerLabel（$pendingUnsupportedReason），继续切换可能导致闪退。"
+            stringResource(id = R.string.provider_google_map_full)
+        }
+        val riskText = if (pendingUnsupportedReason.isBlank()) {
+            stringResource(id = R.string.map_switch_risk_go, providerLabel)
+        } else {
+            stringResource(
+                id = R.string.map_switch_risk_go_with_reason,
+                providerLabel,
+                pendingUnsupportedReason
+            )
         }
         AlertDialog(
             onDismissRequest = { showMapSwitchConfirmDialog = false },
-            title = { Text("地图切换风险提示") },
-            text = { Text("$riskText\n\n是否继续执行地图切换？") },
+            title = { Text(stringResource(id = R.string.map_switch_risk_title)) },
+            text = {
+                Text("$riskText\n\n${stringResource(id = R.string.map_switch_continue_question)}")
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -391,7 +406,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         showMapSwitchConfirmDialog = false
                     }
                 ) {
-                    Text("确认切换")
+                    Text(stringResource(id = R.string.map_switch_button_confirm))
                 }
             },
             dismissButton = {
@@ -407,8 +422,8 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     if (showLanguageOnlyConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showLanguageOnlyConfirmDialog = false },
-            title = { Text("执行确认") },
-            text = { Text("将仅切换语言，不切换地图。是否继续？") },
+            title = { Text(stringResource(id = R.string.map_switch_execute_title)) },
+            text = { Text(stringResource(id = R.string.map_switch_language_only_confirm)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -416,7 +431,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         showLanguageOnlyConfirmDialog = false
                     }
                 ) {
-                    Text("继续")
+                    Text(stringResource(id = R.string.map_switch_button_continue))
                 }
             },
             dismissButton = {

@@ -219,6 +219,7 @@
     <string name="save_to_case">保存到 "%1$s"</string>
 
     <string name="provider_google_places">Google Places</string>
+    <string name="provider_google_map_full">Google 地图</string>
     <string name="provider_google_map_short">谷歌</string>
     <string name="provider_amap">高德地图</string>
     <string name="provider_amap_short">高德</string>
@@ -256,4 +257,22 @@
     <string name="add_point_name_label">点位名称</string>
     <string name="rename_point_title">重命名点位</string>
     <string name="rename_point_label">新名称</string>
+
+    <string name="map_switch_title">地图切换确认</string>
+    <string name="map_switch_risk_title">地图切换风险提示</string>
+    <string name="map_switch_execute_title">执行确认</string>
+    <string name="map_switch_risk_supported">语言切换将联动切换到 %1$s。若当前设备/网络/地区环境不支持，可能会闪退。</string>
+    <string name="map_switch_risk_already_matched">当前地图已是 %1$s，本次仅切换语言。</string>
+    <string name="map_switch_risk_unsupported">当前环境可能不支持 %1$s（%2$s），若强行切换可能会闪退。</string>
+    <string name="map_switch_language_dialog_options">你可以选择：\n1) 仅切换语言（推荐）\n2) 语言+地图一起切换（仅在支持时可用）</string>
+    <string name="map_switch_risk_go">即将切换到 %1$s。若当前设备/地区/网络环境不支持，可能导致闪退。</string>
+    <string name="map_switch_risk_go_with_reason">当前环境可能不支持 %1$s（%2$s），继续切换可能导致闪退。</string>
+    <string name="map_switch_continue_question">是否继续执行地图切换？</string>
+    <string name="map_switch_button_lang_only_recommended">仅切换语言（推荐）</string>
+    <string name="map_switch_button_lang_plus_map">语言+地图一起切换</string>
+    <string name="map_switch_button_lang_only">仅切换语言</string>
+    <string name="map_switch_button_confirm">确认切换</string>
+    <string name="map_switch_button_continue">继续</string>
+    <string name="map_switch_language_only_confirm">将仅切换语言，不切换地图。是否继续？</string>
+    <string name="ar_info_bagua_wuxing">八卦：%1$s  五行：%2$s</string>
 </resources>
