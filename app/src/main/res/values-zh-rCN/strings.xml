@@ -228,7 +228,7 @@
 
     <string name="info_title">应用说明</string>
     <string name="info_section_version_title">版本信息</string>
-    <string name="info_section_version_content">应用名：24 山风水罗盘\n版本：1.0.0 (Phase 3)\n发布时间：2026-02-06</string>
+    <string name="info_section_version_content">应用名：24 山风水罗盘\n版本：0.9.8 (Phase 3)\n发布时间：2026-02-15</string>
     <string name="info_section_features_title">功能说明</string>
     <string name="info_section_features_content">✓ 风水罗盘：实时显示 24 山和八卦方位\n✓ 点位管理：标记并管理堪舆点位\n✓ 连线计算：自动计算方位角和距离\n✓ 多案例：支持创建多个案例独立管理\n✓ 数据持久化：所有数据自动保存</string>
     <string name="info_section_tips_title">使用技巧</string>
@@ -276,3 +276,4 @@
     <string name="map_switch_language_only_confirm">将仅切换语言，不切换地图。是否继续？</string>
     <string name="ar_info_bagua_wuxing">八卦：%1$s  五行：%2$s</string>
 </resources>
+

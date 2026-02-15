@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -143,10 +145,9 @@ fun MapScreen(
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // GPS location state - 等待真实GPS定位
-    // 默认位置：北京天安门广场 (39.9042, 116.4074)，确保罗盘始终可见
-    var realGpsLat by remember { mutableStateOf<Double?>(39.9042) }  // 真实GPS纬度，默认北京
-    var realGpsLng by remember { mutableStateOf<Double?>(116.4074) }  // 真实GPS经度，默认北京
+    // GPS location state - 启动后必须等待真实GPS定位，不再使用北京默认坐标兜底
+    var realGpsLat by remember { mutableStateOf<Double?>(null) }
+    var realGpsLng by remember { mutableStateOf<Double?>(null) }
     var hasRealGps by remember { mutableStateOf(false) }  // 是否已获取真实GPS
     var azimuth by remember { mutableStateOf(0f) }
 
@@ -254,6 +255,7 @@ fun MapScreen(
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
     var lastKnownCameraPosition by remember { mutableStateOf<CameraPosition?>(null) }
     var pendingAutoLocateToGps by remember { mutableStateOf(true) }
+    val gpsInitializationBlocking = !hasRealGps || pendingAutoLocateToGps
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -1098,7 +1100,10 @@ fun MapScreen(
                             .fillMaxSize()
                             .zIndex(0f),
                         initialZoom = 15f,
-                        initialCenter = com.google.android.gms.maps.model.LatLng(realGpsLat ?: 39.9042, realGpsLng ?: 116.4074),
+                        initialCenter = com.google.android.gms.maps.model.LatLng(
+                            realGpsLat ?: lastKnownCameraPosition?.target?.latitude ?: 0.0,
+                            realGpsLng ?: lastKnownCameraPosition?.target?.longitude ?: 0.0
+                        ),
                         onMapReady = { gMap ->
                             mapReady.value = true
                             mapProvider.setGoogleMap(gMap)
@@ -1246,7 +1251,8 @@ fun MapScreen(
                                     MapProviderSelector.isInChina(it.latitude, it.longitude)
                                 } == true
                                 if (inChina) {
-                                    onMapProviderSwitch(MapProviderType.AMAP, cameraSnapshot)
+                                    val switchSnapshot = cameraSnapshot ?: buildCurrentGpsCameraSnapshot()
+                                    onMapProviderSwitch(MapProviderType.AMAP, switchSnapshot)
                                     trialMessage = msgGoogleSatelliteFallback
                                     showTrialDialog = true
                                     return@MapControlButtons
@@ -1270,26 +1276,28 @@ fun MapScreen(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 230.dp, end = 2.dp)
-                    .zIndex(19f)
-            ) {
-                Button(
-                    onClick = { locateToCurrentPosition(showBanner = true, source = CameraMoveSource.USER_MANUAL) },
+            if (!sideBarExpanded) {
+                Box(
                     modifier = Modifier
-                        .width(88.dp)
-                        .heightIn(min = 34.dp)
-                        .shadow(4.dp, RoundedCornerShape(18.dp)),
-                    shape = RoundedCornerShape(18.dp),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF6A4FB5),
-                        contentColor = Color.White
-                    )
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 8.dp, bottom = 88.dp)
+                        .zIndex(19f)
                 ) {
-                    Text(stringResource(id = R.string.action_locate), fontSize = 10.sp, maxLines = 1, softWrap = false)
+                    Button(
+                        onClick = { locateToCurrentPosition(showBanner = true, source = CameraMoveSource.USER_MANUAL) },
+                        modifier = Modifier
+                            .width(88.dp)
+                            .heightIn(min = 34.dp)
+                            .shadow(4.dp, RoundedCornerShape(18.dp)),
+                        shape = RoundedCornerShape(18.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF6A4FB5),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(stringResource(id = R.string.action_locate), fontSize = 10.sp, maxLines = 1, softWrap = false)
+                    }
                 }
             }
             
@@ -1517,6 +1525,17 @@ fun MapScreen(
                         }
                     }
 
+                    SpacerSmall()
+                    Button(
+                        onClick = { locateToCurrentPosition(showBanner = true, source = CameraMoveSource.USER_MANUAL) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 40.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
+                    ) {
+                        Text(stringResource(id = R.string.action_locate_short), fontSize = 11.sp)
+                    }
                     SpacerSmall()
                     Column(
                         modifier = Modifier
@@ -2001,6 +2020,41 @@ fun MapScreen(
                             showTrialDialog = true
                         }
                     )
+                }
+            }
+
+            if (gpsInitializationBlocking) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(35f)
+                        .background(Color(0x9A000000))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {},
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(30.dp)
+                        )
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(
+                            text = stringResource(id = R.string.gps_locating),
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Text(
+                            text = msgGpsGetting,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
 

@@ -21,7 +21,6 @@ class MainActivity : AppCompatActivity() {
             // 权限已授予，无需额外操作，LocationHelper会自动开始工作
         } else {
             // 权限被拒绝，可以在这里显示提示
-            // 注意：罗盘会显示默认位置（北京），不会完全不显示
         }
     }
     

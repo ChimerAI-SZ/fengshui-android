@@ -228,7 +228,7 @@
 
     <string name="info_title">App info</string>
     <string name="info_section_version_title">Version</string>
-    <string name="info_section_version_content">App: 24 Shan Fengshui Compass\nVersion: 1.0.0 (Phase 3)\nRelease: 2026-02-06</string>
+    <string name="info_section_version_content">App: 24 Shan Fengshui Compass\nVersion: 0.9.8 (Phase 3)\nRelease: 2026-02-15</string>
     <string name="info_section_features_title">Features</string>
     <string name="info_section_features_content">✓ Compass: realtime 24 Shan and Bagua\n✓ Point management: mark feng shui points\n✓ Line calculation: bearing and distance\n✓ Multiple cases: isolated management\n✓ Persistence: auto-save all data</string>
     <string name="info_section_tips_title">Tips</string>
@@ -276,3 +276,4 @@
     <string name="map_switch_language_only_confirm">Switch language only, keep current map. Continue?</string>
     <string name="ar_info_bagua_wuxing">Bagua: %1$s  Wuxing: %2$s</string>
 </resources>
+

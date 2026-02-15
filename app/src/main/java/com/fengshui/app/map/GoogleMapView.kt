@@ -19,7 +19,7 @@ import com.google.android.gms.maps.model.LatLng
 fun GoogleMapView(
     modifier: Modifier = Modifier,
     initialZoom: Float = 15f,
-    initialCenter: LatLng = LatLng(39.9042, 116.4074), // 北京为默认中心
+    initialCenter: LatLng = LatLng(0.0, 0.0),
     onMapReady: (GoogleMap) -> Unit = {}
 ) {
     AndroidView(
