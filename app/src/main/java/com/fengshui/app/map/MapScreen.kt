@@ -379,10 +379,9 @@ fun MapScreen(
     }
 
     LaunchedEffect(Unit) {
-        val seenGuide = Prefs.getBoolean(context, "map_first_guide_seen", false)
-        if (!seenGuide) {
+        val guideAcknowledged = Prefs.getBoolean(context, "map_first_guide_seen", false)
+        if (!guideAcknowledged) {
             showFirstUseGuide = true
-            Prefs.saveBoolean(context, "map_first_guide_seen", true)
         }
     }
 
@@ -980,10 +979,7 @@ fun MapScreen(
         val snapshot = restoreCameraPosition
         if (mapReady.value && snapshot != null) {
             suppressAutoLocateOnce = true
-            mapProvider.animateCamera(
-                snapshot.target,
-                snapshot.zoom
-            )
+            mapProvider.animateCamera(snapshot)
             onRestoreCameraConsumed?.invoke()
             delay(300)
             suppressAutoLocateOnce = false
@@ -1166,6 +1162,7 @@ fun MapScreen(
                         onZoomIn = { mapProvider.zoomIn() },
                         onZoomOut = { mapProvider.zoomOut() },
                         onToggleMapType = { type ->
+                            val cameraSnapshot = mapProvider.getCameraPosition()
                             currentMapType = type
                             if (
                                 type == MapType.SATELLITE &&
@@ -1177,13 +1174,19 @@ fun MapScreen(
                                     MapProviderSelector.isInChina(it.latitude, it.longitude)
                                 } == true
                                 if (inChina) {
-                                    onMapProviderSwitch(MapProviderType.AMAP, mapProvider.getCameraPosition())
+                                    onMapProviderSwitch(MapProviderType.AMAP, cameraSnapshot)
                                     trialMessage = msgGoogleSatelliteFallback
                                     showTrialDialog = true
                                     return@MapControlButtons
                                 }
                             }
                             mapProvider.setMapType(type)
+                            cameraSnapshot?.let { snapshot ->
+                                scope.launch {
+                                    delay(160)
+                                    mapProvider.animateCamera(snapshot)
+                                }
+                            }
                         },
                         onSwitchProvider = { target ->
                             onMapProviderSwitch(target, mapProvider.getCameraPosition())
@@ -2014,7 +2017,7 @@ fun MapScreen(
 
             if (showFirstUseGuide) {
                 AlertDialog(
-                    onDismissRequest = { showFirstUseGuide = false },
+                    onDismissRequest = { },
                     title = { Text("地图快速引导") },
                     text = {
                         Column {
@@ -2030,7 +2033,10 @@ fun MapScreen(
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { showFirstUseGuide = false }) {
+                        TextButton(onClick = {
+                            showFirstUseGuide = false
+                            Prefs.saveBoolean(context, "map_first_guide_seen", true)
+                        }) {
                             Text(stringResource(id = R.string.action_confirm))
                         }
                     }

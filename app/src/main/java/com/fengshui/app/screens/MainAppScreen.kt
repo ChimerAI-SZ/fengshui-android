@@ -187,7 +187,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     fun requestMapSwitchOnly(targetProvider: MapProviderType, cameraSnapshot: CameraPosition? = null) {
         if (switchingBusy || mapProviderType == targetProvider) return
         pendingTargetProvider = targetProvider
-        pendingCameraToRestore = cameraSnapshot
+        pendingCameraToRestore = cameraSnapshot ?: mapProvider.getCameraPosition()
         pendingUnsupportedReason = if (isProviderAvailable(targetProvider)) "" else providerUnsupportedReason(targetProvider)
         showMapSwitchConfirmDialog = true
     }

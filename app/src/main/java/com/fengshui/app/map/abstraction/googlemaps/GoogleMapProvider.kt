@@ -8,6 +8,7 @@ import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.CameraPosition as GmsCameraPosition
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import android.graphics.Color
 
@@ -131,6 +132,19 @@ class GoogleMapProvider(
             zoom
         )
         mGoogleMap!!.animateCamera(cameraUpdate, ANIMATION_DURATION_MS, null)
+    }
+
+    override fun animateCamera(position: CameraPosition) {
+        requireNotNull(mGoogleMap) { "GoogleMap not initialized" }
+
+        val currentTilt = mGoogleMap!!.cameraPosition.tilt
+        val targetCamera = GmsCameraPosition.Builder()
+            .target(LatLng(position.target.latitude, position.target.longitude))
+            .zoom(position.zoom)
+            .bearing(position.bearing)
+            .tilt(currentTilt)
+            .build()
+        mGoogleMap!!.animateCamera(CameraUpdateFactory.newCameraPosition(targetCamera), ANIMATION_DURATION_MS, null)
     }
     
     /**

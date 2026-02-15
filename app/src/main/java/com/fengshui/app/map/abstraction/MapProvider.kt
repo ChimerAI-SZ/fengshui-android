@@ -19,6 +19,9 @@ interface MapProvider {
     fun addMarker(position: UniversalLatLng, title: String? = null): UniversalMarker
     fun addPolyline(start: UniversalLatLng, end: UniversalLatLng, width: Float = 8f, color: Int = 0xFF0000): UniversalPolyline
     fun animateCamera(target: UniversalLatLng, zoom: Float)
+    fun animateCamera(position: CameraPosition) {
+        animateCamera(position.target, position.zoom)
+    }
     fun animateCameraToBounds(bounds: UniversalLatLngBounds, padding: Int = 0)
     fun screenLocationToLatLng(x: Float, y: Float): UniversalLatLng
     fun latLngToScreenLocation(position: UniversalLatLng): ScreenPoint

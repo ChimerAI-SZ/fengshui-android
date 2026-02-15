@@ -4,6 +4,7 @@ import android.content.Context
 import com.fengshui.app.map.abstraction.*
 import com.amap.api.maps.AMap
 import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.CameraPosition as AMapCameraPosition
 import com.amap.api.maps.model.MarkerOptions
 import com.amap.api.maps.model.PolylineOptions
 import com.amap.api.maps.model.BitmapDescriptorFactory
@@ -126,6 +127,19 @@ class AMapProvider(
             zoom
         )
         mAMap!!.animateCamera(cameraUpdate)
+    }
+
+    override fun animateCamera(position: CameraPosition) {
+        requireNotNull(mAMap) { "AMap not initialized" }
+
+        val currentTilt = mAMap!!.cameraPosition.tilt
+        val cameraPosition = AMapCameraPosition(
+            LatLng(position.target.latitude, position.target.longitude),
+            position.zoom,
+            currentTilt,
+            position.bearing
+        )
+        mAMap!!.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
     }
     
     /**
