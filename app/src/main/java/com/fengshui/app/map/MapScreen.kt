@@ -161,15 +161,20 @@ fun MapScreen(
     }
     val nominatimPoiProvider: MapPoiProvider = remember { NominatimPoiProvider() }
     val mockPoiProvider: MapPoiProvider = remember { MockPoiProvider() }
-    val isChinaLocale = remember { Locale.getDefault().country.equals("CN", ignoreCase = true) }
+    fun isChinaLocale(): Boolean = Locale.getDefault().country.equals("CN", ignoreCase = true)
+    fun isChineseLanguage(): Boolean = Locale.getDefault().language.startsWith("zh", ignoreCase = true)
 
     fun buildPoiProviderChain(keyword: String): List<MapPoiProvider> {
         val hasChineseChars = keyword.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
         val isTypedKeyword = PoiTypeMapper.isTypedCategoryKeyword(keyword)
+        val appChinese = isChineseLanguage()
         return buildList {
             if (isTypedKeyword) {
                 // Strict type-search mode: use map typed endpoints only, no text-shape fallback providers.
-                if (mapProviderType == MapProviderType.AMAP) {
+                if (!appChinese) {
+                    googlePoiProvider?.let { add(it) }
+                    amapPoiProvider?.let { add(it) }
+                } else if (mapProviderType == MapProviderType.AMAP) {
                     amapPoiProvider?.let { add(it) }
                     googlePoiProvider?.let { add(it) }
                 } else {
@@ -178,7 +183,14 @@ fun MapScreen(
                 }
                 return@buildList
             }
-            if (mapProviderType == MapProviderType.AMAP || isChinaLocale || hasChineseChars) {
+            if (!appChinese) {
+                googlePoiProvider?.let { add(it) }
+                amapPoiProvider?.let { add(it) }
+                add(nominatimPoiProvider)
+                add(mockPoiProvider)
+                return@buildList
+            }
+            if (mapProviderType == MapProviderType.AMAP || isChinaLocale() || hasChineseChars) {
                 amapPoiProvider?.let { add(it) }
             }
             if (mapProviderType == MapProviderType.GOOGLE) {
@@ -186,7 +198,7 @@ fun MapScreen(
             } else {
                 googlePoiProvider?.let { add(it) }
             }
-            if (mapProviderType != MapProviderType.AMAP && !isChinaLocale && !hasChineseChars) {
+            if (mapProviderType != MapProviderType.AMAP && !isChinaLocale() && !hasChineseChars) {
                 amapPoiProvider?.let { add(it) }
             }
             add(nominatimPoiProvider)
@@ -237,6 +249,7 @@ fun MapScreen(
     var showSectorUnsavedOnly by remember { mutableStateOf(false) }
     var showFirstUseGuide by remember { mutableStateOf(false) }
     var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
+    var suppressAutoLocateOnce by remember { mutableStateOf(false) }
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -560,6 +573,20 @@ fun MapScreen(
         ui.showSectorResultDialog = false
         pendingSectorLocatePoi = null
         showPoiMarkers(emptyList())
+        val anchor = ui.sectorOrigin
+            ?: selectedOriginPoint?.let { UniversalLatLng(it.latitude, it.longitude) }
+            ?: mapProvider.getCameraPosition()?.target
+        if (anchor != null) {
+            lockedLat = anchor.latitude
+            lockedLng = anchor.longitude
+            compassLocked = true
+            try {
+                val screenPos = mapProvider.latLngToScreenLocation(anchor)
+                compassScreenPos = Offset(screenPos.x, screenPos.y)
+            } catch (_: Exception) {
+                compassScreenPos = Offset(screenWidthPx / 2f, screenHeightPx / 2f)
+            }
+        }
     }
 
     fun focusOnSectorResults(results: List<PoiResult>) {
@@ -896,7 +923,7 @@ fun MapScreen(
             realGpsLng = lng
             hasRealGps = true  // 标记已获取真实GPS
             // 首次获取GPS位置后，移动地图到当前位置
-            if (mapReady.value && !compassLocked && originPoint == null) {
+            if (mapReady.value && !compassLocked && originPoint == null && !suppressAutoLocateOnce) {
                 requestCameraMove(
                     com.fengshui.app.map.abstraction.UniversalLatLng(lat, lng),
                     15f,
@@ -952,12 +979,14 @@ fun MapScreen(
     LaunchedEffect(mapProviderType, mapReady.value, restoreCameraPosition) {
         val snapshot = restoreCameraPosition
         if (mapReady.value && snapshot != null) {
-            requestCameraMove(
+            suppressAutoLocateOnce = true
+            mapProvider.animateCamera(
                 snapshot.target,
-                snapshot.zoom,
-                CameraMoveSource.USER_MANUAL
+                snapshot.zoom
             )
             onRestoreCameraConsumed?.invoke()
+            delay(300)
+            suppressAutoLocateOnce = false
         }
     }
 
@@ -1989,11 +2018,15 @@ fun MapScreen(
                     title = { Text("地图快速引导") },
                     text = {
                         Column {
-                            Text("1. 右侧“菜单”可展开地图工具、案例操作、分析功能。")
+                            Text("1. 右上角“菜单”用于案例、分析和加点操作；右侧小按钮用于地图缩放与图层/地图切换。")
                             SpacerSmall()
-                            Text("2. 点击加点后，原点会自动锁定罗盘；终点会回到当前原点查看连线。")
+                            Text("2. 加点后：原点会自动锁定罗盘，终点会回到当前原点查看连线。")
                             SpacerSmall()
-                            Text("3. 扇形搜索可先定位，再在地图底部保存并返回结果列表。")
+                            Text("3. 扇形搜索会锁定罗盘到搜索原点；关闭结果后仍保持锁定，便于连续对比方位。")
+                            SpacerSmall()
+                            Text("4. 切换高德/谷歌仅切换底图，地图中心位置保持不变。")
+                            SpacerSmall()
+                            Text("5. 搜索优先显示附近结果；中英文切换后，搜索结果会按当前语言优先展示。")
                         }
                     },
                     confirmButton = {
@@ -2169,6 +2202,8 @@ fun MapScreen(
                         ui.sectorConfigLabel = config.label
                         ui.sectorOverlayVisible = true
                         ui.sectorRenderTick += 1
+                        // 扇形搜索进行中及结束后保持罗盘锁定，锚定到搜索原点。
+                        lockCompassToLatLng(originLatLng.latitude, originLatLng.longitude)
 
                         if (usingMapCenter) {
                             trialMessage = msgSectorFromMapCenter

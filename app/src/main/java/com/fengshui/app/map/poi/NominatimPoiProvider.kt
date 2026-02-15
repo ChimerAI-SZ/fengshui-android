@@ -24,9 +24,11 @@ class NominatimPoiProvider : MapPoiProvider {
         radiusMeters: Int
     ): List<PoiResult> = withContext(Dispatchers.IO) {
         try {
+            val acceptLanguage = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh-CN,en" else "en,zh-CN"
             val encoded = URLEncoder.encode(keyword, "UTF-8")
             val base = StringBuilder("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=50")
-                .append("&accept-language=zh-CN,en")
+                .append("&accept-language=")
+                .append(URLEncoder.encode(acceptLanguage, "UTF-8"))
                 .append("&q=")
                 .append(encoded)
 
@@ -83,7 +85,8 @@ class NominatimPoiProvider : MapPoiProvider {
 
     override suspend fun reverseGeocode(location: UniversalLatLng): String? = withContext(Dispatchers.IO) {
         try {
-            val url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${location.latitude}&lon=${location.longitude}&accept-language=zh-CN,en"
+            val acceptLanguage = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh-CN,en" else "en,zh-CN"
+            val url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${location.latitude}&lon=${location.longitude}&accept-language=${URLEncoder.encode(acceptLanguage, "UTF-8")}"
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", "fengshui-tool/2.1 (Android)")
@@ -98,4 +101,3 @@ class NominatimPoiProvider : MapPoiProvider {
         }
     }
 }
-

@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.util.Locale
 
 /**
  * GooglePlacesProvider based on Places API (New): places:searchText
@@ -25,6 +26,7 @@ class GooglePlacesProvider(private val apiKey: String) : MapPoiProvider {
         try {
             lastStats = ProviderSearchStats(0, 0, null)
             val mappedType = PoiTypeMapper.toGoogleType(keyword)
+            val languageCode = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh-CN" else "en"
             val attempts = mutableListOf<Pair<String, String?>>()
             if (mappedType != null) {
                 attempts += keyword to mappedType
@@ -42,7 +44,7 @@ class GooglePlacesProvider(private val apiKey: String) : MapPoiProvider {
             for ((query, typeOpt) in attempts.distinct()) {
                 val reqBody = JSONObject().apply {
                     put("textQuery", query)
-                    put("languageCode", "zh-CN")
+                    put("languageCode", languageCode)
                     put("maxResultCount", 20)
                     if (typeOpt != null) {
                         put("includedType", typeOpt)

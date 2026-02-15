@@ -8,6 +8,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
+import java.util.Locale
 
 /**
  * AmapPoiProvider - 高德地图 POI 搜索客户端（Retrofit + REST API）
@@ -37,6 +38,7 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
         try {
             lastStats = ProviderSearchStats(0, 0, null)
             val mappedTypeCode = PoiTypeMapper.toAmapTypeCode(keyword)
+            val languageCode = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh_cn" else "en"
             val locationStr = if (location != null) {
                 "${location.longitude},${location.latitude}"
             } else {
@@ -60,7 +62,8 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
                         location = locationStr,
                         key = apiKey,
                         radius = r,
-                        types = mappedTypeCode
+                        types = mappedTypeCode,
+                        language = languageCode
                     )
                     if (resp.status == "1" && !resp.pois.isNullOrEmpty()) {
                         aggregated.addAll(resp.pois)
@@ -73,7 +76,8 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
                             keywords = q,
                             key = apiKey,
                             location = locationStr,
-                            radius = maxRadius
+                            radius = maxRadius,
+                            language = languageCode
                         )
                         if (resp.status == "1" && !resp.pois.isNullOrEmpty()) {
                             aggregated.addAll(resp.pois)
@@ -89,7 +93,8 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
                         keywords = keyword,
                         key = apiKey,
                         location = locationStr,
-                        radius = maxRadius
+                        radius = maxRadius,
+                        language = languageCode
                     )
                 }
             } else {
@@ -100,7 +105,8 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
                         keywords = q,
                         key = apiKey,
                         location = locationStr,
-                        radius = maxRadius
+                        radius = maxRadius,
+                        language = languageCode
                     )
                     if (resp.status == "1" && !resp.pois.isNullOrEmpty()) {
                         chosen = resp
@@ -111,7 +117,8 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
                     keywords = keyword,
                     key = apiKey,
                     location = locationStr,
-                    radius = if (radiusMeters > 0) radiusMeters else null
+                    radius = if (radiusMeters > 0) radiusMeters else null,
+                    language = languageCode
                 )
             }
 
@@ -162,7 +169,8 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
         try {
             val response = apiService.reverseGeocode(
                 location = "${location.longitude},${location.latitude}",
-                key = apiKey
+                key = apiKey,
+                language = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh_cn" else "en"
             )
 
             if (response.status == "1" && response.regeocode != null) {
@@ -191,6 +199,7 @@ interface AmapApiService {
         @Query("key") key: String,
         @Query("location") location: String? = null,
         @Query("radius") radius: Int? = null,
+        @Query("language") language: String? = null,
         @Query("offset") offset: Int = 20
     ): AmapTextSearchResponse
 
@@ -201,6 +210,7 @@ interface AmapApiService {
         @Query("radius") radius: Int = 3000,
         @Query("types") types: String? = null,
         @Query("keywords") keywords: String? = null,
+        @Query("language") language: String? = null,
         @Query("sortrule") sortrule: String = "distance",
         @Query("offset") offset: Int = 50
     ): AmapTextSearchResponse
@@ -208,7 +218,8 @@ interface AmapApiService {
     @GET("geocode/regeo")
     suspend fun reverseGeocode(
         @Query("location") location: String,
-        @Query("key") key: String
+        @Query("key") key: String,
+        @Query("language") language: String? = null
     ): AmapReverseGeocodeResponse
 }
 

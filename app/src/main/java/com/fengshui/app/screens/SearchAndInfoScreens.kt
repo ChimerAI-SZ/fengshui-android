@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,10 +49,13 @@ import com.fengshui.app.utils.ApiKeyConfig
 import com.fengshui.app.map.ui.RegistrationDialog
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
+import com.fengshui.app.BuildConfig
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import java.util.Locale
+import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.utils.RhumbLineUtils
 
 /**
  * SearchScreen - 地址搜索界面
@@ -106,10 +110,20 @@ fun SearchScreen(
     }
     val providerFallback: MapPoiProvider = remember { NominatimPoiProvider() }
     val providerMock: MapPoiProvider = remember { MockPoiProvider() }
-    val isChinaLocale = remember { Locale.getDefault().country.equals("CN", ignoreCase = true) }
+    var userSearchOrigin by remember { mutableStateOf<UniversalLatLng?>(null) }
+    val searchLocationHelper = remember {
+        com.fengshui.app.utils.LocationHelper(context) { lat, lng ->
+            userSearchOrigin = UniversalLatLng(lat, lng)
+        }
+    }
+    DisposableEffect(Unit) {
+        searchLocationHelper.start()
+        onDispose { searchLocationHelper.stop() }
+    }
+
     var providerName by remember {
         mutableStateOf(
-            if (isChinaLocale && providerAmap != null) {
+            if (Locale.getDefault().language.startsWith("zh", ignoreCase = true) && providerAmap != null) {
                 context.getString(R.string.provider_amap)
             } else if (providerGoogle != null) {
                 context.getString(R.string.provider_google_places)
@@ -128,15 +142,25 @@ fun SearchScreen(
     }
 
     suspend fun runSearch(query: String): SearchRunResult {
+        val appChinese = Locale.getDefault().language.startsWith("zh", ignoreCase = true)
+        val isChinaLocale = Locale.getDefault().country.equals("CN", ignoreCase = true)
         val hasChineseChars = query.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
         val providers = buildList<Pair<String, MapPoiProvider>> {
-            if ((isChinaLocale || hasChineseChars) && providerAmap != null) {
-                add(context.getString(R.string.provider_amap) to providerAmap)
+            if (!appChinese) {
+                if (providerGoogle != null) add(context.getString(R.string.provider_google_places) to providerGoogle)
+                if (providerAmap != null) add(context.getString(R.string.provider_amap) to providerAmap)
+            } else {
+                if ((isChinaLocale || hasChineseChars) && providerAmap != null) {
+                    add(context.getString(R.string.provider_amap) to providerAmap)
+                }
+                if (providerGoogle != null) {
+                    add(context.getString(R.string.provider_google_places) to providerGoogle)
+                }
+                if (providerAmap != null && !(isChinaLocale || hasChineseChars)) {
+                    add(context.getString(R.string.provider_amap) to providerAmap)
+                }
             }
-            if (providerGoogle != null) {
-                add(context.getString(R.string.provider_google_places) to providerGoogle)
-            }
-            if (providerAmap != null && !(isChinaLocale || hasChineseChars)) {
+            if (!appChinese && providerAmap != null && providerGoogle == null) {
                 add(context.getString(R.string.provider_amap) to providerAmap)
             }
             add(context.getString(R.string.provider_openstreetmap) to providerFallback)
@@ -145,12 +169,26 @@ fun SearchScreen(
 
         val attempts = mutableListOf<String>()
         providers.forEach { (name, provider) ->
-            val list = provider.searchByKeyword(query.trim())
+            val list = provider.searchByKeyword(
+                keyword = query.trim(),
+                location = userSearchOrigin,
+                radiusMeters = 50_000
+            )
             attempts.add(name)
             if (list.isNotEmpty()) {
+                val sorted = if (userSearchOrigin != null) {
+                    list.sortedBy {
+                        RhumbLineUtils.calculateRhumbDistance(
+                            userSearchOrigin!!,
+                            UniversalLatLng(it.lat, it.lng)
+                        )
+                    }
+                } else {
+                    list
+                }
                 providerName = name
                 return SearchRunResult(
-                    results = list,
+                    results = sorted,
                     activeProviderName = name,
                     attemptedProviders = attempts,
                     hintMessage = null
@@ -519,9 +557,16 @@ fun InfoScreen(
             )
 
             // 版本信息
+            val appName = stringResource(id = R.string.app_name)
+            val buildTime = BuildConfig.BUILD_TIME_UTC.takeIf { it.isNotBlank() } ?: "-"
+            val versionContent = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) {
+                "应用名：$appName\n版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n发布时间：$buildTime"
+            } else {
+                "App: $appName\nVersion: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\nRelease: $buildTime"
+            }
             InfoSection(
                 title = stringResource(id = R.string.info_section_version_title),
-                content = stringResource(id = R.string.info_section_version_content)
+                content = versionContent
             )
 
             // 功能说明

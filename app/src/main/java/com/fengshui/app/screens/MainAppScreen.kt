@@ -126,10 +126,6 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     fun applyLanguageOnly() {
         if (switchingBusy) return
         switchingBusy = true
-        // Avoid map SDK teardown/re-init during locale recreation on some devices.
-        if (currentTab == NavigationItem.MAP) {
-            currentTab = NavigationItem.INFO
-        }
         scope.launch {
             runCatching {
                 delay(120)
@@ -206,19 +202,13 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             showMapSwitchConfirmDialog = true
             return
         }
-        if (currentTab == NavigationItem.MAP) {
-            currentTab = NavigationItem.INFO
-        }
         scope.launch {
             runCatching {
                 delay(120)
                 mapProviderTypeName = targetProvider.name
-                delay(120)
-                currentTab = NavigationItem.MAP
             }.onFailure {
                 // Fallback to AMap to reduce crash risk on provider initialization errors.
                 mapProviderTypeName = MapProviderType.AMAP.name
-                currentTab = NavigationItem.MAP
             }
             switchingBusy = false
         }
