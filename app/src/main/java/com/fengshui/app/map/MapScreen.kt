@@ -250,6 +250,7 @@ fun MapScreen(
     var showFirstUseGuide by remember { mutableStateOf(false) }
     var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
+    var lastKnownCameraPosition by remember { mutableStateOf<CameraPosition?>(null) }
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -447,6 +448,8 @@ fun MapScreen(
     fun requestCameraMove(target: UniversalLatLng, zoom: Float, source: CameraMoveSource) {
         if (viewModel.applyCameraMove(source)) {
             mapProvider.animateCamera(target, zoom)
+            val currentBearing = mapProvider.getCameraPosition()?.bearing ?: 0f
+            lastKnownCameraPosition = CameraPosition(target = target, zoom = zoom, bearing = currentBearing)
         }
     }
 
@@ -937,7 +940,11 @@ fun MapScreen(
 
     DisposableEffect(mapProviderType) {
         locationHelper.start()  // 启动GPS定位
-        val initBearing = mapProvider.getCameraPosition()?.bearing ?: 0f
+        val initCamera = mapProvider.getCameraPosition()
+        if (initCamera != null) {
+            lastKnownCameraPosition = initCamera
+        }
+        val initBearing = initCamera?.bearing ?: 0f
         azimuth = if (mapProviderType == MapProviderType.GOOGLE) -initBearing else initBearing
         
         // 注册地图相机移动监听，用于更新锁定模式下罗盘位置
@@ -948,12 +955,14 @@ fun MapScreen(
             }
             // Compass follows map bearing only (not device sensors).
             azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
+            lastKnownCameraPosition = cam
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
         }
         mapProvider.onCameraChangeFinish { cam ->
             azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
+            lastKnownCameraPosition = cam
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
@@ -975,11 +984,18 @@ fun MapScreen(
         }
     }
 
+    LaunchedEffect(mapProviderType, restoreCameraPosition) {
+        if (restoreCameraPosition != null) {
+            suppressAutoLocateOnce = true
+        }
+    }
+
     LaunchedEffect(mapProviderType, mapReady.value, restoreCameraPosition) {
         val snapshot = restoreCameraPosition
         if (mapReady.value && snapshot != null) {
             suppressAutoLocateOnce = true
             mapProvider.animateCamera(snapshot)
+            lastKnownCameraPosition = snapshot
             onRestoreCameraConsumed?.invoke()
             delay(300)
             suppressAutoLocateOnce = false
@@ -1162,7 +1178,7 @@ fun MapScreen(
                         onZoomIn = { mapProvider.zoomIn() },
                         onZoomOut = { mapProvider.zoomOut() },
                         onToggleMapType = { type ->
-                            val cameraSnapshot = mapProvider.getCameraPosition()
+                            val cameraSnapshot = mapProvider.getCameraPosition() ?: lastKnownCameraPosition
                             currentMapType = type
                             if (
                                 type == MapType.SATELLITE &&
@@ -1185,11 +1201,12 @@ fun MapScreen(
                                 scope.launch {
                                     delay(160)
                                     mapProvider.animateCamera(snapshot)
+                                    lastKnownCameraPosition = snapshot
                                 }
                             }
                         },
                         onSwitchProvider = { target ->
-                            onMapProviderSwitch(target, mapProvider.getCameraPosition())
+                            onMapProviderSwitch(target, mapProvider.getCameraPosition() ?: lastKnownCameraPosition)
                         },
                         modifier = Modifier
                     )
