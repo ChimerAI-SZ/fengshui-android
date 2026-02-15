@@ -69,6 +69,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainAppScreen(modifier: Modifier = Modifier) {
     val PREF_PENDING_MAP_SWITCH = "pending_map_switch_after_locale"
+    val PREF_PENDING_MAP_CAMERA = "pending_map_camera_after_locale"
     var currentTab by remember { mutableStateOf(NavigationItem.MAP) }
     var quickAddCaseId by remember { mutableStateOf<String?>(null) }
     var searchFocus by remember { mutableStateOf<UniversalLatLng?>(null) }
@@ -113,6 +114,28 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         }
 
         val pending = Prefs.getString(context, PREF_PENDING_MAP_SWITCH).orEmpty()
+        val pendingCamera = Prefs.getString(context, PREF_PENDING_MAP_CAMERA).orEmpty()
+        if (pendingCamera.isNotBlank()) {
+            pendingCameraToRestore = pendingCamera
+                .split(",")
+                .takeIf { it.size == 4 }
+                ?.let { parts ->
+                    val lat = parts[0].toDoubleOrNull()
+                    val lng = parts[1].toDoubleOrNull()
+                    val zoom = parts[2].toFloatOrNull()
+                    val bearing = parts[3].toFloatOrNull()
+                    if (lat != null && lng != null && zoom != null && bearing != null) {
+                        CameraPosition(
+                            target = UniversalLatLng(lat, lng),
+                            zoom = zoom,
+                            bearing = bearing
+                        )
+                    } else {
+                        null
+                    }
+                }
+            Prefs.saveString(context, PREF_PENDING_MAP_CAMERA, "")
+        }
         if (pending.isNotBlank()) {
             runCatching { MapProviderType.valueOf(pending) }
                 .getOrNull()
@@ -172,7 +195,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         if (currentLanguageTag.equals(languageTag, ignoreCase = true)) {
             return
         }
-        pendingCameraToRestore = null
+        pendingCameraToRestore = mapProvider.getCameraPosition() ?: pendingCameraToRestore
         pendingIsChinese = nextChinese
         pendingLanguageTag = languageTag
         pendingTargetProvider = if (nextChinese) MapProviderType.AMAP else MapProviderType.GOOGLE
@@ -205,6 +228,9 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         scope.launch {
             runCatching {
                 delay(120)
+                if (pendingCameraToRestore == null) {
+                    pendingCameraToRestore = mapProvider.getCameraPosition()
+                }
                 mapProviderTypeName = targetProvider.name
             }.onFailure {
                 // Fallback to AMap to reduce crash risk on provider initialization errors.
@@ -349,6 +375,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                             if (switchingBusy) return@TextButton
                             // Defer provider switch until after locale recreation to prevent crash.
                             Prefs.saveString(context, PREF_PENDING_MAP_SWITCH, pendingTargetProvider.name)
+                            pendingCameraToRestore?.let { cam ->
+                                val payload = "${cam.target.latitude},${cam.target.longitude},${cam.zoom},${cam.bearing}"
+                                Prefs.saveString(context, PREF_PENDING_MAP_CAMERA, payload)
+                            }
                             applyLanguageOnly()
                             showLanguageMapConfirmDialog = false
                         }
