@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -73,13 +74,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateListOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import android.os.SystemClock
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.fengshui.app.map.abstraction.MapProvider
 import com.fengshui.app.map.abstraction.MapProviderType
 import com.fengshui.app.map.abstraction.MapType
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.map.abstraction.CameraPosition
 import com.fengshui.app.map.abstraction.MapProviderSelector
 import com.fengshui.app.map.ui.MapControlButtons
 import com.fengshui.app.map.ui.CrosshairModeUI
@@ -117,7 +119,9 @@ fun MapScreen(
     mapProviderType: MapProviderType,
     hasGoogleMap: Boolean,
     hasAmapMap: Boolean,
-    onMapProviderSwitch: (MapProviderType) -> Unit,
+    onMapProviderSwitch: (MapProviderType, CameraPosition?) -> Unit,
+    restoreCameraPosition: CameraPosition? = null,
+    onRestoreCameraConsumed: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onCenterCrossClicked: (() -> Unit)? = null,
     quickAddCaseId: String? = null,
@@ -206,7 +210,9 @@ fun MapScreen(
     var destPoint by remember { mutableStateOf<FengShuiPoint?>(null) }
     val lines = remember { mutableStateListOf<Pair<FengShuiPoint, FengShuiPoint>>() }
     var showLineInfo by remember { mutableStateOf(false) }
-    var lineInfoText by remember { mutableStateOf("") }
+    var lineInfoSummary by remember { mutableStateOf("") }
+    var lineInfoDetail by remember { mutableStateOf("") }
+    var lineInfoExpanded by remember { mutableStateOf(false) }
     val lineByPolylineId = remember { mutableStateMapOf<String, LineData>() }
     var showTrialDialog by remember { mutableStateOf(false) }
     var trialMessage by remember { mutableStateOf("") }
@@ -226,6 +232,11 @@ fun MapScreen(
     var selectedPoiDetail by remember { mutableStateOf<PoiResult?>(null) }
     var showPoiDetailDialog by remember { mutableStateOf(false) }
     var pendingSectorLocatePoi by remember { mutableStateOf<PoiResult?>(null) }
+    var statusBannerMessage by remember { mutableStateOf<String?>(null) }
+    var statusBannerToken by remember { mutableStateOf(0) }
+    var showSectorUnsavedOnly by remember { mutableStateOf(false) }
+    var showFirstUseGuide by remember { mutableStateOf(false) }
+    var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -246,7 +257,6 @@ fun MapScreen(
     var sectionCaseExpanded by remember { mutableStateOf(false) }
     var sectionAnalysisExpanded by remember { mutableStateOf(false) }
     var subMapCompassExpanded by remember { mutableStateOf(false) }
-    var subMapLayersExpanded by remember { mutableStateOf(false) }
     var subCaseSelectionExpanded by remember { mutableStateOf(false) }
     var subCaseEditExpanded by remember { mutableStateOf(false) }
     var subAnalysisCoreExpanded by remember { mutableStateOf(false) }
@@ -329,11 +339,15 @@ fun MapScreen(
         sectionCaseExpanded = false
         sectionAnalysisExpanded = false
         subMapCompassExpanded = false
-        subMapLayersExpanded = false
         subCaseSelectionExpanded = false
         subCaseEditExpanded = false
         subAnalysisCoreExpanded = false
         sideBarExpanded = true
+    }
+
+    fun showStatus(message: String) {
+        statusBannerMessage = message
+        statusBannerToken += 1
     }
 
     LaunchedEffect(mapProviderType) {
@@ -342,6 +356,28 @@ fun MapScreen(
         }
         lastProviderType = mapProviderType
         lineByPolylineId.clear()
+    }
+
+    LaunchedEffect(statusBannerToken) {
+        if (statusBannerMessage != null) {
+            delay(2000)
+            statusBannerMessage = null
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val seenGuide = Prefs.getBoolean(context, "map_first_guide_seen", false)
+        if (!seenGuide) {
+            showFirstUseGuide = true
+            Prefs.saveBoolean(context, "map_first_guide_seen", true)
+        }
+    }
+
+    LaunchedEffect(deletedPointUndoCandidate?.id) {
+        if (deletedPointUndoCandidate != null) {
+            delay(5000)
+            deletedPointUndoCandidate = null
+        }
     }
     
     // 从数据库加载指定项目的原点和终点
@@ -368,6 +404,27 @@ fun MapScreen(
                     destPoints.forEach { dest ->
                         linesList.add(LineData(origin, dest))
                     }
+                    lockedLat = origin.latitude
+                    lockedLng = origin.longitude
+                    compassLocked = true
+                    try {
+                        val screenPos = mapProvider.latLngToScreenLocation(
+                            UniversalLatLng(origin.latitude, origin.longitude)
+                        )
+                        compassScreenPos = Offset(screenPos.x, screenPos.y)
+                    } catch (_: Exception) {
+                        compassScreenPos = Offset(screenWidthPx / 2f, screenHeightPx / 2f)
+                    }
+                    if (mapReady.value) {
+                        mapProvider.animateCamera(
+                            UniversalLatLng(origin.latitude, origin.longitude),
+                            15f
+                        )
+                    }
+                } else {
+                    compassLocked = false
+                    lockedLat = null
+                    lockedLng = null
                 }
             } catch (e: Exception) {
                 android.util.Log.e("MapScreen", "Error loading project data: ${e.message}", e)
@@ -449,9 +506,14 @@ fun MapScreen(
 
         originPoints.forEach { point ->
             try {
+                val isActive = selectedOriginPoint?.id == point.id
                 mapProvider.addMarker(
                     UniversalLatLng(point.latitude, point.longitude),
-                    context.getString(R.string.marker_origin_prefix, point.name)
+                    if (isActive) {
+                        "[ORIGIN_ACTIVE] ${context.getString(R.string.marker_origin_prefix, point.name)}"
+                    } else {
+                        context.getString(R.string.marker_origin_prefix, point.name)
+                    }
                 )
             } catch (e: Exception) {
                 android.util.Log.e("MapScreen", "Failed to add origin marker: ${e.message}")
@@ -521,6 +583,15 @@ fun MapScreen(
         )
     }
 
+    fun isPoiAlreadySaved(poi: PoiResult): Boolean {
+        return destPoints.any { p ->
+            RhumbLineUtils.calculateRhumbDistance(
+                UniversalLatLng(p.latitude, p.longitude),
+                UniversalLatLng(poi.lat, poi.lng)
+            ) <= 15.0
+        }
+    }
+
     fun buildLifeCircleLabels(targetId: String): List<String> {
         return viewModel.buildLifeCircleLabels(targetId)
     }
@@ -557,6 +628,9 @@ fun MapScreen(
     fun onPointAdded(point: FengShuiPoint, type: PointType) {
         lastAddedPoint = point
         lastAddedPointType = type
+        showStatus(
+            if (type == PointType.ORIGIN) "已添加原点：${point.name}" else "已添加终点：${point.name}"
+        )
         if (continuousAddMode) {
             showPostSaveQuickActions = false
             viewModel.openCrosshair(
@@ -567,6 +641,34 @@ fun MapScreen(
         } else {
             showPostSaveQuickActions = true
         }
+    }
+
+    fun activeOriginPoint(): FengShuiPoint? {
+        return selectedOriginPoint ?: originPoints.firstOrNull()
+    }
+
+    fun lockCompassToLatLng(lat: Double, lng: Double) {
+        lockedLat = lat
+        lockedLng = lng
+        compassLocked = true
+        try {
+            val screenPos = mapProvider.latLngToScreenLocation(
+                UniversalLatLng(lat, lng)
+            )
+            compassScreenPos = Offset(screenPos.x, screenPos.y)
+        } catch (_: Exception) {
+            compassScreenPos = Offset(screenWidthPx / 2f, screenHeightPx / 2f)
+        }
+    }
+
+    fun lockCompassToPoint(point: FengShuiPoint) {
+        lockCompassToLatLng(point.latitude, point.longitude)
+    }
+
+    fun unlockCompass() {
+        compassLocked = false
+        lockedLat = null
+        lockedLng = null
     }
 
     fun saveCrosshairPoint(pointType: PointType, target: UniversalLatLng, enteredName: String? = null) {
@@ -601,14 +703,26 @@ fun MapScreen(
                     selectedDestinationIds.clear()
                 }
                 refreshLinesForDisplay()
-                compassLocked = false
-                lockedLat = null
-                lockedLng = null
-                requestCameraMove(
-                    UniversalLatLng(p.latitude, p.longitude),
-                    15f,
-                    CameraMoveSource.USER_POINT_SELECT
-                )
+                if (pointType == PointType.ORIGIN) {
+                    // 文档交互：新增原点后，罗盘锁定在原点并以原点为中心。
+                    lockCompassToPoint(p)
+                    requestCameraMove(
+                        UniversalLatLng(p.latitude, p.longitude),
+                        15f,
+                        CameraMoveSource.USER_POINT_SELECT
+                    )
+                } else {
+                    // 文档交互：新增终点后，若存在原点则回到原点并锁定罗盘；若无原点仅保存终点，不强制改视角。
+                    val origin = activeOriginPoint()
+                    if (origin != null) {
+                        lockCompassToPoint(origin)
+                        requestCameraMove(
+                            UniversalLatLng(origin.latitude, origin.longitude),
+                            15f,
+                            CameraMoveSource.USER_POINT_SELECT
+                        )
+                    }
+                }
                 onPointAdded(p, pointType)
                 if (!continuousAddMode) {
                     ui.crosshairMode = false
@@ -622,6 +736,7 @@ fun MapScreen(
     }
 
     fun removePointAndRefresh(point: FengShuiPoint) {
+        deletedPointUndoCandidate = point
         repo.deletePoint(point.id)
         if (point.type == PointType.ORIGIN) {
             originPoints.removeAll { it.id == point.id }
@@ -635,6 +750,7 @@ fun MapScreen(
             selectedDestinationIds.removeAll { it == point.id }
         }
         refreshLinesForDisplay()
+        showStatus("${point.name} 已删除，可撤销")
     }
 
     fun saveLifeCircleWizardState() {
@@ -654,13 +770,17 @@ fun MapScreen(
                 return
             }
             lastCompassUpdateMs = now
-            val screenPos = mapProvider.latLngToScreenLocation(
-                com.fengshui.app.map.abstraction.UniversalLatLng(
-                    lockedLat!!,
-                    lockedLng!!
+            try {
+                val screenPos = mapProvider.latLngToScreenLocation(
+                    com.fengshui.app.map.abstraction.UniversalLatLng(
+                        lockedLat!!,
+                        lockedLng!!
+                    )
                 )
-            )
-            compassScreenPos = Offset(screenPos.x, screenPos.y)
+                compassScreenPos = Offset(screenPos.x, screenPos.y)
+            } catch (_: Exception) {
+                compassScreenPos = Offset(screenWidthPx / 2f, screenHeightPx / 2f)
+            }
         }
     }
     
@@ -791,7 +911,8 @@ fun MapScreen(
 
     DisposableEffect(mapProviderType) {
         locationHelper.start()  // 启动GPS定位
-        azimuth = mapProvider.getCameraPosition()?.bearing ?: 0f
+        val initBearing = mapProvider.getCameraPosition()?.bearing ?: 0f
+        azimuth = if (mapProviderType == MapProviderType.GOOGLE) -initBearing else initBearing
         
         // 注册地图相机移动监听，用于更新锁定模式下罗盘位置
         mapProvider.onCameraChange { cam ->
@@ -800,13 +921,13 @@ fun MapScreen(
                 markUserManualCamera()
             }
             // Compass follows map bearing only (not device sensors).
-            azimuth = cam.bearing
+            azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
         }
         mapProvider.onCameraChangeFinish { cam ->
-            azimuth = cam.bearing
+            azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
@@ -828,6 +949,18 @@ fun MapScreen(
         }
     }
 
+    LaunchedEffect(mapProviderType, mapReady.value, restoreCameraPosition) {
+        val snapshot = restoreCameraPosition
+        if (mapReady.value && snapshot != null) {
+            requestCameraMove(
+                snapshot.target,
+                snapshot.zoom,
+                CameraMoveSource.USER_MANUAL
+            )
+            onRestoreCameraConsumed?.invoke()
+        }
+    }
+
     fun showLineInfoFor(line: LineData) {
         val bearing = RhumbLineUtils.calculateRhumbBearing(
             line.origin.latitude, line.origin.longitude,
@@ -840,7 +973,8 @@ fun MapScreen(
             line.origin.latitude, line.origin.longitude,
             line.destination.latitude, line.destination.longitude
         )
-        lineInfoText = context.getString(
+        lineInfoSummary = "${line.origin.name} -> ${line.destination.name} | ${"%.1f".format(bearing)}° | $shan | ${"%.1f".format(dist)}m"
+        lineInfoDetail = context.getString(
             R.string.line_info_text,
             line.origin.name,
             line.destination.name,
@@ -854,6 +988,7 @@ fun MapScreen(
             wuxing,
             dist
         )
+        lineInfoExpanded = false
         showLineInfo = true
     }
 
@@ -971,6 +1106,61 @@ fun MapScreen(
                     }
                     Text("北", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                     Text("N", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                }
+            }
+
+            statusBannerMessage?.let { msg ->
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp)
+                        .zIndex(25f)
+                        .background(Color(0xE62B2B2B), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(msg, color = Color.White, fontSize = 12.sp)
+                }
+            }
+
+            if (!sideBarExpanded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 186.dp, end = 2.dp)
+                        .zIndex(19f)
+                ) {
+                    MapControlButtons(
+                        currentMapType = currentMapType,
+                        currentProviderType = mapProviderType,
+                        hasGoogleMap = hasGoogleMap,
+                        hasAmapMap = hasAmapMap,
+                        onZoomIn = { mapProvider.zoomIn() },
+                        onZoomOut = { mapProvider.zoomOut() },
+                        onToggleMapType = { type ->
+                            currentMapType = type
+                            if (
+                                type == MapType.SATELLITE &&
+                                mapProviderType == MapProviderType.GOOGLE &&
+                                hasAmapMap
+                            ) {
+                                val center = mapProvider.getCameraPosition()?.target
+                                val inChina = center?.let {
+                                    MapProviderSelector.isInChina(it.latitude, it.longitude)
+                                } == true
+                                if (inChina) {
+                                    onMapProviderSwitch(MapProviderType.AMAP, mapProvider.getCameraPosition())
+                                    trialMessage = msgGoogleSatelliteFallback
+                                    showTrialDialog = true
+                                    return@MapControlButtons
+                                }
+                            }
+                            mapProvider.setMapType(type)
+                        },
+                        onSwitchProvider = { target ->
+                            onMapProviderSwitch(target, mapProvider.getCameraPosition())
+                        },
+                        modifier = Modifier
+                    )
                 }
             }
             
@@ -1126,72 +1316,95 @@ fun MapScreen(
                 ) {}
             }
 
-            // 右侧侧边栏
-            if (sideBarExpanded) {
+            if (continuousAddMode && ui.crosshairMode) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(1.5f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            sideBarExpanded = false
-                        }
-                )
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 164.dp, start = 16.dp, end = 16.dp)
+                        .zIndex(4f)
+                        .background(Color(0xE62B2B2B), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.continuous_add_map_move_hint),
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
+                }
             }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = 6.dp, top = 44.dp)
-                    .zIndex(2f)
-                    .width(150.dp)
-                    .background(Color(0xEEFFFFFF), RoundedCornerShape(16.dp))
-                    .padding(8.dp)
-            ) {
-                if (!sideBarExpanded) {
+            // 右侧侧边栏展开时允许地图继续拖动，避免误导用户“地图不可操作”。
+
+            if (!sideBarExpanded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 8.dp, top = 56.dp)
+                        .zIndex(2f)
+                ) {
                     Button(
                         onClick = { openSidebarCollapsed() },
                         modifier = Modifier
-                            .width(92.dp)
-                            .align(Alignment.CenterHorizontally)
-                            .heightIn(min = 36.dp),
-                        shape = RoundedCornerShape(22.dp)
-                    ) {
-                        Text(stringResource(id = R.string.menu_open), fontSize = 12.sp)
-                    }
-                } else {
-                    Button(
-                        onClick = { sideBarExpanded = false },
-                        modifier = Modifier
-                            .width(98.dp)
-                            .align(Alignment.CenterHorizontally)
-                            .heightIn(min = 36.dp),
-                        shape = RoundedCornerShape(21.dp),
+                            .width(54.dp)
+                            .heightIn(min = 34.dp)
+                            .shadow(5.dp, RoundedCornerShape(11.dp)),
+                        shape = RoundedCornerShape(11.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
                     ) {
-                        Text(stringResource(id = R.string.menu_collapse), fontSize = 12.sp)
+                        Text("☰", fontSize = 11.sp)
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 8.dp, top = 52.dp)
+                        .zIndex(2f)
+                        .width(138.dp)
+                        .background(Color(0xEFFFFFFF), RoundedCornerShape(16.dp))
+                        .border(0.5.dp, Color(0x16000000), RoundedCornerShape(16.dp))
+                        .padding(7.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.menu_open),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = { sideBarExpanded = false },
+                            modifier = Modifier
+                                .width(54.dp)
+                                .heightIn(min = 36.dp)
+                                .shadow(4.dp, RoundedCornerShape(10.dp)),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
+                        ) {
+                            Text("收", fontSize = 10.sp)
+                        }
                     }
 
                     SpacerSmall()
                     Column(
                         modifier = Modifier
-                            .heightIn(max = 520.dp)
+                            .heightIn(max = 500.dp)
                             .verticalScroll(sidebarScrollState)
                     ) {
                         val sectionButtonModifier = Modifier
-                            .width(116.dp)
-                            .align(Alignment.CenterHorizontally)
-                            .heightIn(min = 38.dp)
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
                         val subHeaderModifier = Modifier
-                            .width(104.dp)
-                            .align(Alignment.End)
-                            .heightIn(min = 34.dp)
+                            .fillMaxWidth()
+                            .padding(start = 8.dp)
+                            .heightIn(min = 40.dp)
                         val subButtonModifier = Modifier
-                            .width(102.dp)
-                            .align(Alignment.End)
-                            .heightIn(min = 34.dp)
+                            .fillMaxWidth()
+                            .padding(start = 16.dp)
+                            .heightIn(min = 40.dp)
                         SidebarSectionHeader(
                             title = sectionMapTools,
                             expanded = sectionMapToolsExpanded,
@@ -1210,18 +1423,15 @@ fun MapScreen(
                                     if (!compassLocked) {
                                         val currentPos = mapProvider.getCameraPosition()?.target
                                         if (currentPos != null) {
-                                            lockedLat = currentPos.latitude
-                                            lockedLng = currentPos.longitude
-                                            compassLocked = true
-                                            updateCompassScreenPosition()
+                                            lockCompassToLatLng(currentPos.latitude, currentPos.longitude)
+                                            showStatus("罗盘已锁定")
                                         } else {
                                             trialMessage = msgNoLocation
                                             showTrialDialog = true
                                         }
                                     } else {
-                                        compassLocked = false
-                                        lockedLat = null
-                                        lockedLng = null
+                                        unlockCompass()
+                                        showStatus("罗盘已解锁")
                                     }
                                 }, modifier = subButtonModifier) {
                                     Text(
@@ -1237,9 +1447,8 @@ fun MapScreen(
                                             15f,
                                             CameraMoveSource.USER_MANUAL
                                         )
-                                        compassLocked = false
-                                        lockedLat = null
-                                        lockedLng = null
+                                        unlockCompass()
+                                        showStatus("已定位到当前位置")
                                     } else {
                                         trialMessage = msgGpsGetting
                                         showTrialDialog = true
@@ -1264,47 +1473,6 @@ fun MapScreen(
                                 SpacerSmall()
                             }
 
-                            SidebarSubSectionHeader(
-                                title = stringResource(id = R.string.subsection_map_layers),
-                                expanded = subMapLayersExpanded,
-                                onToggle = { subMapLayersExpanded = !subMapLayersExpanded },
-                                modifier = subHeaderModifier
-                            )
-                            if (subMapLayersExpanded) {
-                                MapControlButtons(
-                                    currentMapType = currentMapType,
-                                    currentProviderType = mapProviderType,
-                                    hasGoogleMap = hasGoogleMap,
-                                    hasAmapMap = hasAmapMap,
-                                    onZoomIn = { mapProvider.zoomIn() },
-                                    onZoomOut = { mapProvider.zoomOut() },
-                                    onToggleMapType = { type ->
-                                        currentMapType = type
-                                        if (
-                                            type == MapType.SATELLITE &&
-                                            mapProviderType == MapProviderType.GOOGLE &&
-                                            hasAmapMap
-                                        ) {
-                                            val center = mapProvider.getCameraPosition()?.target
-                                            val inChina = center?.let {
-                                                MapProviderSelector.isInChina(it.latitude, it.longitude)
-                                            } == true
-                                            if (inChina) {
-                                                onMapProviderSwitch(MapProviderType.AMAP)
-                                                trialMessage = msgGoogleSatelliteFallback
-                                                showTrialDialog = true
-                                                return@MapControlButtons
-                                            }
-                                        }
-                                        mapProvider.setMapType(type)
-                                    },
-                                    onSwitchProvider = onMapProviderSwitch,
-                                    modifier = Modifier
-                                        .align(Alignment.End)
-                                        .padding(end = 2.dp)
-                                )
-                                SpacerSmall()
-                            }
                             SpacerSmall()
                         }
 
@@ -1435,7 +1603,8 @@ fun MapScreen(
                                         val bagua = RhumbLineUtils.getBaGua(bearing)
                                         val wuxing = RhumbLineUtils.getWuXing(bearing)
                                         val dist = RhumbLineUtils.haversineDistanceMeters(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
-                                        lineInfoText = context.getString(
+                                        lineInfoSummary = "${originPoint!!.name} -> ${destPoint!!.name} | ${"%.1f".format(bearing)}° | $shan | ${"%.1f".format(dist)}m"
+                                        lineInfoDetail = context.getString(
                                             R.string.line_info_text,
                                             originPoint!!.name,
                                             destPoint!!.name,
@@ -1449,6 +1618,7 @@ fun MapScreen(
                                             wuxing,
                                             dist
                                         )
+                                        lineInfoExpanded = false
                                         showLineInfo = true
                                     }, modifier = subButtonModifier) { Text(stringResource(id = R.string.action_show_line_info), fontSize = 10.sp) }
                                 }
@@ -1515,6 +1685,63 @@ fun MapScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(stringResource(id = R.string.action_stop_add), fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            if (deletedPointUndoCandidate != null && !ui.crosshairMode) {
+                val deleted = deletedPointUndoCandidate!!
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 84.dp, start = 12.dp, end = 12.dp)
+                        .zIndex(4f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xEEFFFFFF), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${deleted.name} 已删除",
+                            modifier = Modifier.weight(1f),
+                            fontSize = 12.sp
+                        )
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val project = currentProject
+                                        if (project != null) {
+                                            val restored = repo.createPoint(
+                                                deleted.name,
+                                                deleted.latitude,
+                                                deleted.longitude,
+                                                deleted.type,
+                                                project.id,
+                                                address = deleted.address,
+                                                groupName = project.name
+                                            )
+                                            if (restored.type == PointType.ORIGIN) {
+                                                originPoints.add(restored)
+                                            } else {
+                                                destPoints.add(restored)
+                                            }
+                                            refreshLinesForDisplay()
+                                            showStatus("已撤销删除")
+                                        }
+                                    } catch (_: Exception) {
+                                    } finally {
+                                        deletedPointUndoCandidate = null
+                                    }
+                                }
+                            },
+                            modifier = Modifier.heightIn(min = 44.dp)
+                        ) {
+                            Text(stringResource(id = R.string.action_undo), fontSize = 12.sp)
                         }
                     }
                 }
@@ -1673,7 +1900,20 @@ fun MapScreen(
                     confirmButton = {
                         TextButton(onClick = { showLineInfo = false }) { Text(stringResource(id = R.string.action_confirm)) }
                     },
-                    text = { Text(lineInfoText) }
+                    dismissButton = {
+                        TextButton(onClick = { lineInfoExpanded = !lineInfoExpanded }) {
+                            Text(if (lineInfoExpanded) "收起详情" else "展开详情")
+                        }
+                    },
+                    text = {
+                        Column {
+                            Text(lineInfoSummary)
+                            if (lineInfoExpanded) {
+                                SpacerSmall()
+                                Text(lineInfoDetail)
+                            }
+                        }
+                    }
                 )
             }
 
@@ -1739,6 +1979,27 @@ fun MapScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = { lifeCircleWizardStep = 0 }) { Text(stringResource(id = R.string.action_cancel)) }
+                    }
+                )
+            }
+
+            if (showFirstUseGuide) {
+                AlertDialog(
+                    onDismissRequest = { showFirstUseGuide = false },
+                    title = { Text("地图快速引导") },
+                    text = {
+                        Column {
+                            Text("1. 右侧“菜单”可展开地图工具、案例操作、分析功能。")
+                            SpacerSmall()
+                            Text("2. 点击加点后，原点会自动锁定罗盘；终点会回到当前原点查看连线。")
+                            SpacerSmall()
+                            Text("3. 扇形搜索可先定位，再在地图底部保存并返回结果列表。")
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showFirstUseGuide = false }) {
+                            Text(stringResource(id = R.string.action_confirm))
+                        }
                     }
                 )
             }
@@ -1964,6 +2225,12 @@ fun MapScreen(
                                 Text(stringResource(id = R.string.sector_search_loading))
                             } else if (ui.sectorResults.isEmpty()) {
                                 Text(stringResource(id = R.string.sector_no_results))
+                                SpacerSmall()
+                                Text(
+                                    text = "建议：扩大距离 / 切换关键词（如住宅=小区/公寓）/ 切换地图源后重试",
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
                             } else {
                                 val effectiveKm = ui.sectorEffectiveRadiusMeters / 1000f
                                 Text(
@@ -1995,6 +2262,16 @@ fun MapScreen(
                                         fontSize = 12.sp
                                     )
                                 }
+                                SpacerSmall()
+                                Button(
+                                    onClick = { showSectorUnsavedOnly = !showSectorUnsavedOnly },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        if (showSectorUnsavedOnly) "显示全部结果" else "仅显示未保存",
+                                        fontSize = 12.sp
+                                    )
+                                }
                                 ui.sectorNoticeCount?.let { count ->
                                     Text(
                                         stringResource(id = R.string.sector_notice, count),
@@ -2013,7 +2290,12 @@ fun MapScreen(
                                 } else {
                                     ui.sectorResults.sortedBy { it.name }
                                 }
-                                shownResults.forEach { poi ->
+                                val visibleResults = if (showSectorUnsavedOnly) {
+                                    shownResults.filter { !isPoiAlreadySaved(it) }
+                                } else {
+                                    shownResults
+                                }
+                                visibleResults.forEach { poi ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -2040,7 +2322,7 @@ fun MapScreen(
                                             pendingSectorLocatePoi = poi
                                             ui.showSectorResultDialog = false
                                             requestCameraMove(target, 16f, CameraMoveSource.USER_POINT_SELECT)
-                                        }) {
+                                        }, modifier = Modifier.heightIn(min = 44.dp)) {
                                             Text(stringResource(id = R.string.action_locate_short))
                                         }
                                         Spacer(modifier = Modifier.size(6.dp))
@@ -2064,12 +2346,13 @@ fun MapScreen(
                                                     destPoints.add(p)
                                                     selectedDestinationIds.clear()
                                                     refreshLinesForDisplay()
+                                                    showStatus("已保存到当前案例")
                                                 } catch (e: Exception) {
                                                     trialMessage = e.message ?: msgAddDestinationFailed
                                                     showTrialDialog = true
                                                 }
                                             }
-                                        }) {
+                                        }, modifier = Modifier.heightIn(min = 44.dp)) {
                                             Text(stringResource(id = R.string.action_save))
                                         }
                                     }
@@ -2372,14 +2655,24 @@ fun MapScreen(
                                         }
                                     }
 
-                                    compassLocked = false
-                                    lockedLat = null
-                                    lockedLng = null
-                                    requestCameraMove(
-                                        UniversalLatLng(p.latitude, p.longitude),
-                                        15f,
-                                        CameraMoveSource.USER_POINT_SELECT
-                                    )
+                                    if (addPointType == PointType.ORIGIN) {
+                                        lockCompassToPoint(p)
+                                        requestCameraMove(
+                                            UniversalLatLng(p.latitude, p.longitude),
+                                            15f,
+                                            CameraMoveSource.USER_POINT_SELECT
+                                        )
+                                    } else {
+                                        val origin = activeOriginPoint()
+                                        if (origin != null) {
+                                            lockCompassToPoint(origin)
+                                            requestCameraMove(
+                                                UniversalLatLng(origin.latitude, origin.longitude),
+                                                15f,
+                                                CameraMoveSource.USER_POINT_SELECT
+                                            )
+                                        }
+                                    }
                                     onPointAdded(p, addPointType)
                                     sideBarExpanded = false
 
@@ -2458,10 +2751,8 @@ fun MapScreen(
                                             selectedDestinationIds.clear()
                                             selectedDestinationIds.addAll(pendingDestinationIds)
                                             refreshLinesForDisplay()
-                                            lockedLat = point.latitude
-                                            lockedLng = point.longitude
-                                            compassLocked = true
-                                            updateCompassScreenPosition()
+                                            lockCompassToPoint(point)
+                                            showStatus("已切换原点并锁定罗盘")
                                             requestCameraMove(
                                                 UniversalLatLng(point.latitude, point.longitude),
                                                 15f,
@@ -2500,10 +2791,8 @@ fun MapScreen(
                                             selectedDestinationIds.clear()
                                             refreshLinesForDisplay()
                                             // 锁定罗盘到原点位置
-                                            lockedLat = point.latitude
-                                            lockedLng = point.longitude
-                                            compassLocked = true
-                                            updateCompassScreenPosition()
+                                            lockCompassToPoint(point)
+                                            showStatus("已切换原点并锁定罗盘")
                                             requestCameraMove(
                                                 com.fengshui.app.map.abstraction.UniversalLatLng(point.latitude, point.longitude),
                                                 15f,
@@ -2549,11 +2838,13 @@ private fun SidebarSectionHeader(
     Button(
         onClick = onToggle,
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
     ) {
         Text(
-            text = if (expanded) "▼ $title" else "▶ $title",
-            fontSize = 11.sp
+            text = if (expanded) "$title ▾" else "$title ▸",
+            fontSize = 11.sp,
+            maxLines = 1
         )
     }
     SpacerSmall()
@@ -2569,13 +2860,14 @@ private fun SidebarSubSectionHeader(
     Button(
         onClick = onToggle,
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD7CEEF))
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE1DAF2))
     ) {
         Text(
-            text = if (expanded) "▼ $title" else "▶ $title",
+            text = if (expanded) "$title ▾" else "$title ▸",
             fontSize = 10.sp,
-            color = Color(0xFF3F2E7A)
+            color = Color(0xFF3F2E7A),
+            maxLines = 1
         )
     }
     SpacerSmall()

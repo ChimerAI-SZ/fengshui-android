@@ -1,8 +1,13 @@
 package com.fengshui.app.map.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -10,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
@@ -34,84 +40,116 @@ fun MapControlButtons(
     onSwitchProvider: (MapProviderType) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val providerButtonWidth = 96.dp
+    val targetProvider = if (currentProviderType == MapProviderType.AMAP) {
+        MapProviderType.GOOGLE
+    } else {
+        MapProviderType.AMAP
+    }
+    val targetEnabled = when (targetProvider) {
+        MapProviderType.GOOGLE -> hasGoogleMap
+        MapProviderType.AMAP -> hasAmapMap
+    }
+    val switchLabel = if (targetProvider == MapProviderType.GOOGLE) {
+        "切到谷歌"
+    } else {
+        "切到高德"
+    }
 
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.End,
         modifier = modifier
     ) {
-        Button(onClick = onZoomIn, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) {
-            Text("+", color = Color.White)
-        }
-
-        Button(onClick = onZoomOut, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) {
-            Text("-", color = Color.White)
-        }
-
         val label = if (currentMapType == MapType.VECTOR) {
             stringResource(id = R.string.map_type_satellite_short)
         } else {
             stringResource(id = R.string.map_type_vector_short)
         }
-        Button(
-            onClick = { onToggleMapType(if (currentMapType == MapType.VECTOR) MapType.SATELLITE else MapType.VECTOR) },
-            modifier = Modifier.size(width = providerButtonWidth, height = 48.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-        ) {
-            Text(
-                text = label,
-                maxLines = 1,
-                softWrap = false,
-                fontSize = 13.sp
-            )
-        }
+        MapChipButton(
+            text = label,
+            selected = true,
+            onClick = { onToggleMapType(if (currentMapType == MapType.VECTOR) MapType.SATELLITE else MapType.VECTOR) }
+        )
+        MapChipButton(
+            text = switchLabel,
+            selected = false,
+            enabled = targetEnabled,
+            onClick = { onSwitchProvider(targetProvider) }
+        )
 
-        val googleLabel = stringResource(id = R.string.provider_google_map_short)
-        val googleSelected = currentProviderType == MapProviderType.GOOGLE
-        Button(
-            enabled = hasGoogleMap,
-            onClick = { onSwitchProvider(MapProviderType.GOOGLE) },
-            modifier = Modifier.size(width = providerButtonWidth, height = 50.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-            colors = if (googleSelected) {
-                ButtonDefaults.buttonColors()
-            } else {
-                ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
+        Box(
+            modifier = Modifier
+                .width(88.dp)
         ) {
-            Text(
-                text = googleLabel,
-                maxLines = 1,
-                softWrap = false,
-                fontSize = 13.sp
-            )
-        }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Button(
+                    onClick = onZoomIn,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier
+                        .size(34.dp)
+                        .shadow(4.dp, RoundedCornerShape(19.dp)),
+                    shape = RoundedCornerShape(19.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF2B2B2B)
+                    )
+                ) {
+                    Text("+", color = Color(0xFF2B2B2B), fontSize = 14.sp)
+                }
 
-        val amapLabel = stringResource(id = R.string.provider_amap_short)
-        val amapSelected = currentProviderType == MapProviderType.AMAP
-        Button(
-            enabled = hasAmapMap,
-            onClick = { onSwitchProvider(MapProviderType.AMAP) },
-            modifier = Modifier.size(width = providerButtonWidth, height = 50.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-            colors = if (amapSelected) {
-                ButtonDefaults.buttonColors()
-            } else {
-                ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                Button(
+                    onClick = onZoomOut,
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier
+                        .size(34.dp)
+                        .shadow(4.dp, RoundedCornerShape(19.dp)),
+                    shape = RoundedCornerShape(19.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF2B2B2B)
+                    )
+                ) {
+                    Text("-", color = Color(0xFF2B2B2B), fontSize = 14.sp)
+                }
             }
-        ) {
-            Text(
-                text = amapLabel,
-                maxLines = 1,
-                softWrap = false,
-                fontSize = 13.sp
+        }
+    }
+}
+
+@Composable
+private fun MapChipButton(
+    text: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Button(
+        enabled = enabled,
+        onClick = onClick,
+        modifier = Modifier
+            .width(88.dp)
+            .heightIn(min = 34.dp)
+            .shadow(4.dp, RoundedCornerShape(19.dp)),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = if (selected) {
+            ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
+        } else {
+            ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFFFFFFF),
+                contentColor = Color(0xFF2B2B2B)
             )
         }
+    ) {
+        Text(
+            text = text,
+            maxLines = 1,
+            softWrap = false,
+            fontSize = 10.sp
+        )
     }
 }

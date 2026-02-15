@@ -66,6 +66,9 @@
     <string name="action_exit_ar">Exit AR</string>
     <string name="ar_compass_permission_denied">Camera permission is required to open AR compass.</string>
     <string name="ar_compass_open_failed">Unable to open camera. Please check permission or device support.</string>
+    <string name="ar_info_title">AR Compass Mode</string>
+    <string name="ar_info_heading">Heading: %1$.0f°</string>
+    <string name="ar_info_tip">Move slowly and align real-world direction with the compass.</string>
 
     <string name="crosshair_current_case">Current case: %1$s</string>
     <string name="crosshair_search_title">Search location</string>

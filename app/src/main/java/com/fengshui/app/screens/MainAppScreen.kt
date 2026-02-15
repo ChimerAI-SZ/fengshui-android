@@ -33,6 +33,7 @@ import androidx.core.os.LocaleListCompat
 import com.fengshui.app.navigation.NavigationItem
 import com.fengshui.app.map.MapScreen
 import com.fengshui.app.map.abstraction.MapProviderType
+import com.fengshui.app.map.abstraction.CameraPosition
 import com.fengshui.app.map.abstraction.UniversalLatLng
 import com.fengshui.app.map.abstraction.amap.AMapProvider
 import com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider
@@ -77,7 +78,9 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     var pendingIsChinese by remember { mutableStateOf(false) }
     var pendingLanguageTag by remember { mutableStateOf("en") }
     var pendingTargetProvider by remember { mutableStateOf(MapProviderType.AMAP) }
+    var pendingCameraToRestore by remember { mutableStateOf<CameraPosition?>(null) }
     var pendingUnsupportedReason by remember { mutableStateOf("") }
+    var switchingBusy by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val googleKey = ApiKeyConfig.getGoogleMapsApiKey(context)
@@ -121,16 +124,21 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     }
 
     fun applyLanguageOnly() {
+        if (switchingBusy) return
+        switchingBusy = true
         // Avoid map SDK teardown/re-init during locale recreation on some devices.
         if (currentTab == NavigationItem.MAP) {
             currentTab = NavigationItem.INFO
         }
         scope.launch {
-            delay(120)
-            isChinese = pendingIsChinese
-            AppCompatDelegate.setApplicationLocales(
-                LocaleListCompat.forLanguageTags(pendingLanguageTag)
-            )
+            runCatching {
+                delay(120)
+                isChinese = pendingIsChinese
+                AppCompatDelegate.setApplicationLocales(
+                    LocaleListCompat.forLanguageTags(pendingLanguageTag)
+                )
+            }
+            switchingBusy = false
         }
     }
 
@@ -163,6 +171,12 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     }
 
     fun requestLanguageSwitch(nextChinese: Boolean, languageTag: String) {
+        if (switchingBusy) return
+        val currentLanguageTag = if (isChinese) "zh-CN" else "en"
+        if (currentLanguageTag.equals(languageTag, ignoreCase = true)) {
+            return
+        }
+        pendingCameraToRestore = null
         pendingIsChinese = nextChinese
         pendingLanguageTag = languageTag
         pendingTargetProvider = if (nextChinese) MapProviderType.AMAP else MapProviderType.GOOGLE
@@ -174,22 +188,39 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         showLanguageMapConfirmDialog = true
     }
 
-    fun requestMapSwitchOnly(targetProvider: MapProviderType) {
-        if (mapProviderType == targetProvider) return
+    fun requestMapSwitchOnly(targetProvider: MapProviderType, cameraSnapshot: CameraPosition? = null) {
+        if (switchingBusy || mapProviderType == targetProvider) return
         pendingTargetProvider = targetProvider
+        pendingCameraToRestore = cameraSnapshot
         pendingUnsupportedReason = if (isProviderAvailable(targetProvider)) "" else providerUnsupportedReason(targetProvider)
         showMapSwitchConfirmDialog = true
     }
 
     fun applyMapSwitchSafely(targetProvider: MapProviderType) {
+        if (switchingBusy) return
+        switchingBusy = true
+        val availableNow = isProviderAvailable(targetProvider)
+        if (!availableNow) {
+            pendingUnsupportedReason = providerUnsupportedReason(targetProvider)
+            switchingBusy = false
+            showMapSwitchConfirmDialog = true
+            return
+        }
         if (currentTab == NavigationItem.MAP) {
             currentTab = NavigationItem.INFO
         }
         scope.launch {
-            delay(120)
-            mapProviderTypeName = targetProvider.name
-            delay(120)
-            currentTab = NavigationItem.MAP
+            runCatching {
+                delay(120)
+                mapProviderTypeName = targetProvider.name
+                delay(120)
+                currentTab = NavigationItem.MAP
+            }.onFailure {
+                // Fallback to AMap to reduce crash risk on provider initialization errors.
+                mapProviderTypeName = MapProviderType.AMAP.name
+                currentTab = NavigationItem.MAP
+            }
+            switchingBusy = false
         }
     }
 
@@ -243,9 +274,11 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         mapProviderType = mapProviderType,
                         hasGoogleMap = hasGoogleMapKey,
                         hasAmapMap = hasAmapKey,
-                        onMapProviderSwitch = { targetType ->
-                            requestMapSwitchOnly(targetType)
+                        onMapProviderSwitch = { targetType, cameraSnapshot ->
+                            requestMapSwitchOnly(targetType, cameraSnapshot)
                         },
+                        restoreCameraPosition = pendingCameraToRestore,
+                        onRestoreCameraConsumed = { pendingCameraToRestore = null },
                         modifier = Modifier.fillMaxSize(),
                         quickAddCaseId = quickAddCaseId,
                         onQuickAddConsumed = { quickAddCaseId = null },
@@ -306,6 +339,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             confirmButton = {
                 TextButton(
                     onClick = {
+                        if (switchingBusy) return@TextButton
                         applyLanguageOnly()
                         showLanguageMapConfirmDialog = false
                     }
@@ -317,6 +351,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                 if (mapSwitchSupported) {
                     TextButton(
                         onClick = {
+                            if (switchingBusy) return@TextButton
                             // Defer provider switch until after locale recreation to prevent crash.
                             Prefs.saveString(context, PREF_PENDING_MAP_SWITCH, pendingTargetProvider.name)
                             applyLanguageOnly()
@@ -361,6 +396,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             confirmButton = {
                 TextButton(
                     onClick = {
+                        if (switchingBusy) return@TextButton
                         applyMapSwitchSafely(pendingTargetProvider)
                         showMapSwitchConfirmDialog = false
                     }

@@ -51,10 +51,12 @@ class AMapProvider(
         requireNotNull(mAMap) { "AMap not initialized" }
         val rawTitle = title ?: "Marker"
         val isPoiMarker = rawTitle.startsWith("[POI] ")
+        val isActiveOrigin = rawTitle.startsWith("[ORIGIN_ACTIVE] ")
         val colorMatch = Regex("^\\[(DEST_C[0-4])\\]\\s*").find(rawTitle)
         val colorCode = colorMatch?.groupValues?.getOrNull(1)
         val displayTitle = when {
             isPoiMarker -> rawTitle.removePrefix("[POI] ").ifBlank { "Marker" }
+            isActiveOrigin -> rawTitle.removePrefix("[ORIGIN_ACTIVE] ").ifBlank { "Marker" }
             colorMatch != null -> rawTitle.removePrefix(colorMatch.value).ifBlank { "Marker" }
             else -> rawTitle
         }
@@ -64,6 +66,8 @@ class AMapProvider(
             .title(displayTitle)
         if (isPoiMarker) {
             markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET))
+        } else if (isActiveOrigin) {
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_CYAN))
         } else if (colorCode != null) {
             val hue = when (colorCode) {
                 "DEST_C0" -> BitmapDescriptorFactory.HUE_RED

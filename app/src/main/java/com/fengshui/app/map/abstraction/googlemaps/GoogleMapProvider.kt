@@ -58,10 +58,12 @@ class GoogleMapProvider(
         requireNotNull(mGoogleMap) { "GoogleMap not initialized" }
         val rawTitle = title ?: "Marker"
         val isPoiMarker = rawTitle.startsWith("[POI] ")
+        val isActiveOrigin = rawTitle.startsWith("[ORIGIN_ACTIVE] ")
         val colorMatch = Regex("^\\[(DEST_C[0-4])\\]\\s*").find(rawTitle)
         val colorCode = colorMatch?.groupValues?.getOrNull(1)
         val displayTitle = when {
             isPoiMarker -> rawTitle.removePrefix("[POI] ").ifBlank { "Marker" }
+            isActiveOrigin -> rawTitle.removePrefix("[ORIGIN_ACTIVE] ").ifBlank { "Marker" }
             colorMatch != null -> rawTitle.removePrefix(colorMatch.value).ifBlank { "Marker" }
             else -> rawTitle
         }
@@ -71,6 +73,8 @@ class GoogleMapProvider(
             .title(displayTitle)
         if (isPoiMarker) {
             markerOptions.icon(BitmapDescriptorFactory.defaultMarker(280f))
+        } else if (isActiveOrigin) {
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(190f))
         } else if (colorCode != null) {
             val hue = when (colorCode) {
                 "DEST_C0" -> 0f

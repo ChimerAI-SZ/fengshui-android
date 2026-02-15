@@ -66,6 +66,9 @@
     <string name="action_exit_ar">退出AR</string>
     <string name="ar_compass_permission_denied">打开AR罗盘需要相机权限。</string>
     <string name="ar_compass_open_failed">无法打开相机，请检查权限或设备是否支持。</string>
+    <string name="ar_info_title">AR罗盘模式</string>
+    <string name="ar_info_heading">当前朝向：%1$.0f°</string>
+    <string name="ar_info_tip">请缓慢转动手机，将实景方向与罗盘对齐。</string>
 
     <string name="crosshair_current_case">当前案例: %1$s</string>
     <string name="crosshair_search_title">搜索位置</string>
