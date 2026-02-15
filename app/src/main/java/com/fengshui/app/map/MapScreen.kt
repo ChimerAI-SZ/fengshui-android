@@ -57,9 +57,6 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import com.fengshui.app.R
 import com.fengshui.app.map.ui.CompassOverlay
 import com.fengshui.app.data.PointRepository
@@ -137,22 +134,6 @@ fun MapScreen(
     var currentMapType by remember { mutableStateOf(MapType.VECTOR) }
     var compassLocked by remember { mutableStateOf(false) }  // 罗盘锁定状态
     var compassScreenPos by remember { mutableStateOf(Offset(0f, 0f)) }  // 锁定时罗盘在屏幕上的位置
-    val smoothCompassX by animateFloatAsState(
-        targetValue = compassScreenPos.x,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "smoothCompassX"
-    )
-    val smoothCompassY by animateFloatAsState(
-        targetValue = compassScreenPos.y,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "smoothCompassY"
-    )
     var lockedLat by remember { mutableStateOf<Double?>(null) }  // 锁定位置的纬度
     var lockedLng by remember { mutableStateOf<Double?>(null) }  // 锁定位置的经度
     var lastCompassUpdateMs by remember { mutableStateOf(0L) }
@@ -392,7 +373,7 @@ fun MapScreen(
         }
         lastProviderType = mapProviderType
         lineByPolylineId.clear()
-        pendingAutoLocateToGps = true
+        pendingAutoLocateToGps = restoreCameraPosition == null
     }
 
     LaunchedEffect(statusBannerToken) {
@@ -491,9 +472,9 @@ fun MapScreen(
     }
 
     fun buildPreferredSwitchCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
-        return buildCurrentGpsCameraSnapshot(defaultZoom)
-            ?: mapProvider.getCameraPosition()
+        return mapProvider.getCameraPosition()
             ?: lastKnownCameraPosition
+            ?: buildCurrentGpsCameraSnapshot(defaultZoom)
     }
 
     fun locateToCurrentPosition(showBanner: Boolean = true, source: CameraMoveSource = CameraMoveSource.USER_MANUAL) {
@@ -854,11 +835,7 @@ fun MapScreen(
     // 更新罗盘在屏幕上的位置（锁定模式下使用）
     fun updateCompassScreenPosition() {
         if (compassLocked && lockedLat != null && lockedLng != null) {
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastCompassUpdateMs < 8) {
-                return
-            }
-            lastCompassUpdateMs = now
+            lastCompassUpdateMs = android.os.SystemClock.elapsedRealtime()
             try {
                 val screenPos = mapProvider.latLngToScreenLocation(
                     com.fengshui.app.map.abstraction.UniversalLatLng(
@@ -1048,6 +1025,7 @@ fun MapScreen(
         if (
             mapReady.value &&
             pendingAutoLocateToGps &&
+            hasRealGps &&
             realGpsLat != null &&
             realGpsLng != null &&
             !suppressAutoLocateOnce
@@ -1073,6 +1051,7 @@ fun MapScreen(
             suppressAutoLocateOnce = true
             mapProvider.animateCamera(snapshot)
             lastKnownCameraPosition = snapshot
+            pendingAutoLocateToGps = false
             onRestoreCameraConsumed?.invoke()
             delay(300)
             suppressAutoLocateOnce = false
@@ -1244,7 +1223,7 @@ fun MapScreen(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 186.dp, end = 2.dp)
+                        .padding(top = 124.dp, end = 2.dp)
                         .zIndex(19f)
                 ) {
                     MapControlButtons(
@@ -1294,7 +1273,7 @@ fun MapScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 292.dp, end = 2.dp)
+                    .padding(top = 230.dp, end = 2.dp)
                     .zIndex(19f)
             ) {
                 Button(
@@ -1930,8 +1909,8 @@ fun MapScreen(
                         .zIndex(1.2f)) {
                         Box(modifier = Modifier
                             .graphicsLayer {
-                                translationX = smoothCompassX - compassRadiusPx
-                                translationY = smoothCompassY - compassRadiusPx
+                                translationX = compassScreenPos.x - compassRadiusPx
+                                translationY = compassScreenPos.y - compassRadiusPx
                             }) {
                             CompassOverlay(
                                 azimuthDegrees = azimuth,
