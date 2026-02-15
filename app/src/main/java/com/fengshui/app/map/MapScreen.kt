@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +38,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -55,6 +57,9 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import com.fengshui.app.R
 import com.fengshui.app.map.ui.CompassOverlay
 import com.fengshui.app.data.PointRepository
@@ -132,6 +137,22 @@ fun MapScreen(
     var currentMapType by remember { mutableStateOf(MapType.VECTOR) }
     var compassLocked by remember { mutableStateOf(false) }  // 罗盘锁定状态
     var compassScreenPos by remember { mutableStateOf(Offset(0f, 0f)) }  // 锁定时罗盘在屏幕上的位置
+    val smoothCompassX by animateFloatAsState(
+        targetValue = compassScreenPos.x,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "smoothCompassX"
+    )
+    val smoothCompassY by animateFloatAsState(
+        targetValue = compassScreenPos.y,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "smoothCompassY"
+    )
     var lockedLat by remember { mutableStateOf<Double?>(null) }  // 锁定位置的纬度
     var lockedLng by remember { mutableStateOf<Double?>(null) }  // 锁定位置的经度
     var lastCompassUpdateMs by remember { mutableStateOf(0L) }
@@ -251,6 +272,7 @@ fun MapScreen(
     var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
     var lastKnownCameraPosition by remember { mutableStateOf<CameraPosition?>(null) }
+    var pendingAutoLocateToGps by remember { mutableStateOf(true) }
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -370,6 +392,7 @@ fun MapScreen(
         }
         lastProviderType = mapProviderType
         lineByPolylineId.clear()
+        pendingAutoLocateToGps = true
     }
 
     LaunchedEffect(statusBannerToken) {
@@ -447,9 +470,46 @@ fun MapScreen(
 
     fun requestCameraMove(target: UniversalLatLng, zoom: Float, source: CameraMoveSource) {
         if (viewModel.applyCameraMove(source)) {
-            mapProvider.animateCamera(target, zoom)
-            val currentBearing = mapProvider.getCameraPosition()?.bearing ?: 0f
-            lastKnownCameraPosition = CameraPosition(target = target, zoom = zoom, bearing = currentBearing)
+            val currentBearing = mapProvider.getCameraPosition()?.bearing
+                ?: lastKnownCameraPosition?.bearing
+                ?: 0f
+            val position = CameraPosition(target = target, zoom = zoom, bearing = currentBearing)
+            mapProvider.animateCamera(position)
+            lastKnownCameraPosition = position
+        }
+    }
+
+    fun buildCurrentGpsCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
+        val lat = realGpsLat ?: return null
+        val lng = realGpsLng ?: return null
+        val current = mapProvider.getCameraPosition() ?: lastKnownCameraPosition
+        return CameraPosition(
+            target = UniversalLatLng(lat, lng),
+            zoom = current?.zoom ?: defaultZoom,
+            bearing = current?.bearing ?: 0f
+        )
+    }
+
+    fun buildPreferredSwitchCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
+        return buildCurrentGpsCameraSnapshot(defaultZoom)
+            ?: mapProvider.getCameraPosition()
+            ?: lastKnownCameraPosition
+    }
+
+    fun locateToCurrentPosition(showBanner: Boolean = true, source: CameraMoveSource = CameraMoveSource.USER_MANUAL) {
+        val snapshot = buildCurrentGpsCameraSnapshot()
+        if (snapshot != null) {
+            requestCameraMove(snapshot.target, snapshot.zoom, source)
+            compassLocked = false
+            lockedLat = null
+            lockedLng = null
+            pendingAutoLocateToGps = false
+            if (showBanner) {
+                showStatus("已定位到当前位置")
+            }
+        } else {
+            trialMessage = msgGpsGetting
+            showTrialDialog = true
         }
     }
 
@@ -795,7 +855,7 @@ fun MapScreen(
     fun updateCompassScreenPosition() {
         if (compassLocked && lockedLat != null && lockedLng != null) {
             val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastCompassUpdateMs < 16) {
+            if (now - lastCompassUpdateMs < 8) {
                 return
             }
             lastCompassUpdateMs = now
@@ -924,13 +984,13 @@ fun MapScreen(
             realGpsLat = lat
             realGpsLng = lng
             hasRealGps = true  // 标记已获取真实GPS
-            // 首次获取GPS位置后，移动地图到当前位置
-            if (mapReady.value && !compassLocked && originPoint == null && !suppressAutoLocateOnce) {
+            if (mapReady.value && pendingAutoLocateToGps && !suppressAutoLocateOnce) {
                 requestCameraMove(
-                    com.fengshui.app.map.abstraction.UniversalLatLng(lat, lng),
+                    UniversalLatLng(lat, lng),
                     15f,
                     CameraMoveSource.GPS_AUTO_LOCATE
                 )
+                pendingAutoLocateToGps = false
             }
         }
     }
@@ -981,6 +1041,23 @@ fun MapScreen(
         
         onDispose {
             locationHelper.stop()  // 停止GPS定位
+        }
+    }
+
+    LaunchedEffect(mapReady.value, realGpsLat, realGpsLng, pendingAutoLocateToGps, suppressAutoLocateOnce) {
+        if (
+            mapReady.value &&
+            pendingAutoLocateToGps &&
+            realGpsLat != null &&
+            realGpsLng != null &&
+            !suppressAutoLocateOnce
+        ) {
+            requestCameraMove(
+                UniversalLatLng(realGpsLat!!, realGpsLng!!),
+                15f,
+                CameraMoveSource.GPS_AUTO_LOCATE
+            )
+            pendingAutoLocateToGps = false
         }
     }
 
@@ -1178,14 +1255,14 @@ fun MapScreen(
                         onZoomIn = { mapProvider.zoomIn() },
                         onZoomOut = { mapProvider.zoomOut() },
                         onToggleMapType = { type ->
-                            val cameraSnapshot = mapProvider.getCameraPosition() ?: lastKnownCameraPosition
+                            val cameraSnapshot = buildPreferredSwitchCameraSnapshot()
                             currentMapType = type
                             if (
                                 type == MapType.SATELLITE &&
                                 mapProviderType == MapProviderType.GOOGLE &&
                                 hasAmapMap
                             ) {
-                                val center = mapProvider.getCameraPosition()?.target
+                                val center = cameraSnapshot?.target
                                 val inChina = center?.let {
                                     MapProviderSelector.isInChina(it.latitude, it.longitude)
                                 } == true
@@ -1202,14 +1279,38 @@ fun MapScreen(
                                     delay(160)
                                     mapProvider.animateCamera(snapshot)
                                     lastKnownCameraPosition = snapshot
+                                    pendingAutoLocateToGps = false
                                 }
                             }
                         },
                         onSwitchProvider = { target ->
-                            onMapProviderSwitch(target, mapProvider.getCameraPosition() ?: lastKnownCameraPosition)
+                            onMapProviderSwitch(target, buildPreferredSwitchCameraSnapshot())
                         },
                         modifier = Modifier
                     )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 292.dp, end = 2.dp)
+                    .zIndex(19f)
+            ) {
+                Button(
+                    onClick = { locateToCurrentPosition(showBanner = true, source = CameraMoveSource.USER_MANUAL) },
+                    modifier = Modifier
+                        .width(88.dp)
+                        .heightIn(min = 34.dp)
+                        .shadow(4.dp, RoundedCornerShape(18.dp)),
+                    shape = RoundedCornerShape(18.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF6A4FB5),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(stringResource(id = R.string.action_locate), fontSize = 10.sp, maxLines = 1, softWrap = false)
                 }
             }
             
@@ -1487,23 +1588,6 @@ fun MapScreen(
                                         if (compassLocked) stringResource(id = R.string.action_unlock) else stringResource(id = R.string.action_lock),
                                         fontSize = 11.sp
                                     )
-                                }
-                                SpacerSmall()
-                                Button(onClick = {
-                                    if (realGpsLat != null && realGpsLng != null) {
-                                        requestCameraMove(
-                                            UniversalLatLng(realGpsLat!!, realGpsLng!!),
-                                            15f,
-                                            CameraMoveSource.USER_MANUAL
-                                        )
-                                        unlockCompass()
-                                        showStatus("已定位到当前位置")
-                                    } else {
-                                        trialMessage = msgGpsGetting
-                                        showTrialDialog = true
-                                    }
-                                }, modifier = subButtonModifier) {
-                                    Text(stringResource(id = R.string.action_locate), fontSize = 11.sp)
                                 }
                                 SpacerSmall()
                                 Button(onClick = {
@@ -1845,11 +1929,9 @@ fun MapScreen(
                         .fillMaxSize()
                         .zIndex(1.2f)) {
                         Box(modifier = Modifier
-                            .offset { 
-                                IntOffset(
-                                    (compassScreenPos.x - compassRadiusPx).toInt(),
-                                    (compassScreenPos.y - compassRadiusPx).toInt()
-                                )
+                            .graphicsLayer {
+                                translationX = smoothCompassX - compassRadiusPx
+                                translationY = smoothCompassY - compassRadiusPx
                             }) {
                             CompassOverlay(
                                 azimuthDegrees = azimuth,
