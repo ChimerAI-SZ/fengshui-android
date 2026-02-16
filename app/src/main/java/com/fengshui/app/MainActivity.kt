@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.fengshui.app.screens.MainAppScreen
+import com.fengshui.app.utils.AppLanguageManager
 import com.fengshui.app.utils.PermissionHelper
 
 class MainActivity : AppCompatActivity() {
@@ -25,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppLanguageManager.applySavedLanguageOrSystem(this)
         super.onCreate(savedInstanceState)
         
         // 请求GPS定位权限

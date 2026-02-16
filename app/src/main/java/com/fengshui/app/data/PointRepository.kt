@@ -1,6 +1,7 @@
 package com.fengshui.app.data
 
 import android.content.Context
+import com.fengshui.app.R
 import com.fengshui.app.utils.Prefs
 import org.json.JSONArray
 import org.json.JSONObject
@@ -99,7 +100,10 @@ class PointRepository(private val context: Context) {
             val existing = loadProjects()
             if (existing.size >= com.fengshui.app.TrialManager.TRIAL_MAX_GROUPS) {
                 throw com.fengshui.app.TrialLimitException(
-                    "试用版最多创建 ${com.fengshui.app.TrialManager.TRIAL_MAX_GROUPS} 个项目。",
+                    context.getString(
+                        R.string.trial_limit_max_projects,
+                        com.fengshui.app.TrialManager.TRIAL_MAX_GROUPS
+                    ),
                     com.fengshui.app.TrialLimitException.LimitType.GROUP
                 )
             }
@@ -130,13 +134,25 @@ class PointRepository(private val context: Context) {
                 PointType.ORIGIN -> {
                     val origins = existing.filter { it.type == PointType.ORIGIN && !it.isGPSOrigin }
                     if (origins.size >= com.fengshui.app.TrialManager.TRIAL_MAX_ORIGINS) {
-                        throw com.fengshui.app.TrialLimitException("试用版最多创建 ${com.fengshui.app.TrialManager.TRIAL_MAX_ORIGINS} 个原点。", com.fengshui.app.TrialLimitException.LimitType.ORIGIN)
+                        throw com.fengshui.app.TrialLimitException(
+                            context.getString(
+                                R.string.trial_limit_max_origins,
+                                com.fengshui.app.TrialManager.TRIAL_MAX_ORIGINS
+                            ),
+                            com.fengshui.app.TrialLimitException.LimitType.ORIGIN
+                        )
                     }
                 }
                 PointType.DESTINATION -> {
                     val dests = existing.filter { it.type == PointType.DESTINATION }
                     if (dests.size >= com.fengshui.app.TrialManager.TRIAL_MAX_DESTINATIONS) {
-                        throw com.fengshui.app.TrialLimitException("试用版最多创建 ${com.fengshui.app.TrialManager.TRIAL_MAX_DESTINATIONS} 个终点。", com.fengshui.app.TrialLimitException.LimitType.DESTINATION)
+                        throw com.fengshui.app.TrialLimitException(
+                            context.getString(
+                                R.string.trial_limit_max_destinations,
+                                com.fengshui.app.TrialManager.TRIAL_MAX_DESTINATIONS
+                            ),
+                            com.fengshui.app.TrialLimitException.LimitType.DESTINATION
+                        )
                     }
                 }
             }

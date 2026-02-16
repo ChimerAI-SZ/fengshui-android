@@ -1,6 +1,7 @@
 package com.fengshui.app.map.poi
 
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.utils.AppLanguageManager
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -8,7 +9,6 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
-import java.util.Locale
 
 /**
  * AmapPoiProvider - 高德地图 POI 搜索客户端（Retrofit + REST API）
@@ -38,7 +38,7 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
         try {
             lastStats = ProviderSearchStats(0, 0, null)
             val mappedTypeCode = PoiTypeMapper.toAmapTypeCode(keyword)
-            val languageCode = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh_cn" else "en"
+            val languageCode = AppLanguageManager.amapLanguageCode()
             val locationStr = if (location != null) {
                 "${location.longitude},${location.latitude}"
             } else {
@@ -170,7 +170,7 @@ class AmapPoiProvider(private val apiKey: String) : MapPoiProvider {
             val response = apiService.reverseGeocode(
                 location = "${location.longitude},${location.latitude}",
                 key = apiKey,
-                language = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh_cn" else "en"
+                language = AppLanguageManager.amapLanguageCode()
             )
 
             if (response.status == "1" && response.regeocode != null) {

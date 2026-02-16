@@ -3,10 +3,10 @@ package com.fengshui.app.data
 // 24-shan helpers and mappings.
 object ShanUtils {
     val SHAN_NAMES = arrayOf(
-        "子", "癸", "丑", "艮", "寅", "甲",
-        "卯", "乙", "辰", "巽", "巳", "丙",
-        "午", "丁", "未", "坤", "申", "庚",
-        "酉", "辛", "戌", "乾", "亥", "壬"
+        "zi", "gui", "chou", "gen", "yin", "jia",
+        "mao", "yi", "chen", "xun", "si", "bing",
+        "wu", "ding", "wei", "kun", "shen", "geng",
+        "you", "xin", "xu", "qian", "hai", "ren"
     )
 
     const val SHAN_ANGLE = 15f
@@ -59,23 +59,23 @@ object ShanUtils {
     fun getOppositeShanIndex(angle: Float): Int = getOppositeShanIndex(getShanIndex(angle))
 }
 
-enum class BaGua(val label: String, val startAngle: Float) {
-    KAN("坎", 337.5f),
-    GEN("艮", 22.5f),
-    ZHEN("震", 67.5f),
-    XUN("巽", 112.5f),
-    LI("离", 157.5f),
-    KUN("坤", 202.5f),
-    DUI("兑", 247.5f),
-    QIAN("乾", 292.5f)
+enum class BaGua(val startAngle: Float) {
+    KAN(337.5f),
+    GEN(22.5f),
+    ZHEN(67.5f),
+    XUN(112.5f),
+    LI(157.5f),
+    KUN(202.5f),
+    DUI(247.5f),
+    QIAN(292.5f)
 }
 
-enum class WuXing(val label: String, val color: Int) {
-    JIN("金", 0xFFFFD700.toInt()),
-    MU("木", 0xFF228B22.toInt()),
-    SHUI("水", 0xFF1E90FF.toInt()),
-    HUO("火", 0xFFFF4500.toInt()),
-    TU("土", 0xFFDEB887.toInt())
+enum class WuXing(val color: Int) {
+    JIN(0xFFFFD700.toInt()),
+    MU(0xFF228B22.toInt()),
+    SHUI(0xFF1E90FF.toInt()),
+    HUO(0xFFFF4500.toInt()),
+    TU(0xFFDEB887.toInt())
 }
 
 data class ShanInfo(

@@ -104,14 +104,6 @@ class MapUiStateViewModel : ViewModel() {
         ui.lifeCircleConnections.clear()
     }
 
-    fun buildLifeCircleLabels(targetId: String): List<String> {
-        return ui.lifeCircleConnections
-            .filter { it.toPoint.id == targetId }
-            .map { conn ->
-                "→${conn.fromPoint.name}→ | ${"%.1f".format(conn.bearing)}° | ${conn.shanName} | ${"%.1f".format(conn.distance / 1000f)}km"
-            }
-    }
-
     fun runSectorSearch(
         providers: List<MapPoiProvider>,
         origin: UniversalLatLng,
@@ -152,11 +144,11 @@ class MapUiStateViewModel : ViewModel() {
                     when (provider) {
                         is AmapPoiProvider -> {
                             ui.sectorDebugAmapRaw += stats?.rawCount ?: raw.size
-                            ui.sectorDebugAmapStatus = stats?.debugStatus ?: "NO_STATS"
+                            ui.sectorDebugAmapStatus = stats?.debugStatus ?: "-"
                         }
                         is GooglePlacesProvider -> {
                             ui.sectorDebugGoogleRaw += stats?.rawCount ?: raw.size
-                            ui.sectorDebugGoogleStatus = stats?.debugStatus ?: "NO_STATS"
+                            ui.sectorDebugGoogleStatus = stats?.debugStatus ?: "-"
                         }
                     }
                     if (stats != null) {

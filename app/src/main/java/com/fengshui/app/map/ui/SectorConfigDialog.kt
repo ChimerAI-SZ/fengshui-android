@@ -23,11 +23,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.fengshui.app.data.BaGua
-import com.fengshui.app.data.ShanUtils
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
+import com.fengshui.app.utils.ShanTextResolver
 import kotlin.math.roundToInt
 
 enum class SectorMode {
@@ -58,6 +59,7 @@ fun SectorConfigDialog(
     onClearSector: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var keyword by remember { mutableStateOf(initialConfig?.keyword ?: "") }
     var distanceInput by remember {
         mutableStateOf(
@@ -100,8 +102,9 @@ fun SectorConfigDialog(
         )
     }
 
-    val shanName = ShanUtils.SHAN_NAMES[shanIndex]
+    val shanName = ShanTextResolver.shanName(context, shanIndex)
     val bagua = BaGua.values()[baguaIndex]
+    val baguaName = ShanTextResolver.baguaName(context, bagua)
     val distanceNumber = distanceInput.toFloatOrNull()
     val distanceMeters = when (distanceUnit) {
         DistanceUnit.METERS -> distanceNumber
@@ -204,7 +207,7 @@ fun SectorConfigDialog(
                                 distanceInput = preset.toString()
                                 distanceUnit = DistanceUnit.KILOMETERS
                             },
-                            label = { Text("${preset}km") }
+                            label = { Text(stringResource(id = R.string.sector_distance_preset_km, preset)) }
                         )
                     }
                 }
@@ -245,7 +248,7 @@ fun SectorConfigDialog(
                         }
                         Spacer(modifier = Modifier.size(8.dp))
                         Text(
-                            stringResource(id = R.string.sector_current_label, bagua.label),
+                            stringResource(id = R.string.sector_current_label, baguaName),
                             modifier = Modifier.padding(top = 10.dp)
                         )
                         Spacer(modifier = Modifier.size(8.dp))
@@ -270,7 +273,7 @@ fun SectorConfigDialog(
                     } else {
                         val start = bagua.startAngle
                         val end = (bagua.startAngle + 45f) % 360f
-                        Triple(start, end, bagua.label)
+                        Triple(start, end, baguaName)
                     }
 
                     onConfirm(

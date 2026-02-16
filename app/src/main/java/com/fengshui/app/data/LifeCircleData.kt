@@ -13,15 +13,13 @@ data class LifeCircleConnection(
     val toPoint: FengShuiPoint,
     val distance: Float,
     val bearing: Float,
-    val shanName: String
+    val shanIndex: Int
 )
 
 enum class LifeCirclePointType(
-    val label: String,
-    val icon: String,
     val compassSize: Int
 ) {
-    HOME("家", "🏠", 1000),
-    WORK("公司", "💼", 750),
-    ENTERTAINMENT("日常场所", "🍽️", 500)
+    HOME(1000),
+    WORK(750),
+    ENTERTAINMENT(500)
 }

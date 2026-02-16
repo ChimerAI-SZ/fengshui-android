@@ -59,14 +59,14 @@ object LifeCircleUtils {
                 com.fengshui.app.map.abstraction.UniversalLatLng(from.latitude, from.longitude),
                 com.fengshui.app.map.abstraction.UniversalLatLng(to.latitude, to.longitude)
             )
-            val shanName = RhumbLineUtils.getShanName(bearing)
+            val shanIndex = RhumbLineUtils.getShanIndex(bearing)
             connections.add(
                 LifeCircleConnection(
                     fromPoint = from,
                     toPoint = to,
                     distance = distance,
                     bearing = bearing,
-                    shanName = shanName
+                    shanIndex = shanIndex
                 )
             )
         }

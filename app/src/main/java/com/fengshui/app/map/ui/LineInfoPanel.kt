@@ -96,7 +96,7 @@ fun LineInfoPanel(
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onClose) {
-                    Text("×", fontSize = 28.sp, color = Color.Gray)
+                    Text(stringResource(id = R.string.symbol_close), fontSize = 28.sp, color = Color.Gray)
                 }
             }
 
@@ -131,7 +131,7 @@ fun LineInfoPanel(
                 InfoSection(title = stringResource(id = R.string.line_info_section_distance)) {
                     InfoRow(
                         label = stringResource(id = R.string.label_distance),
-                        value = String.format("%.1f m", distance),
+                        value = stringResource(id = R.string.distance_meter_value, distance),
                         backgroundColor = Color(0xFFE8F5E9)
                     )
                 }
@@ -228,13 +228,13 @@ private fun InfoCoordinate(
             modifier = Modifier.padding(bottom = 4.dp)
         )
         Text(
-            text = "N ${"%.6f".format(lat)}",
+            text = stringResource(id = R.string.coordinate_latitude_value, lat),
             fontSize = 11.sp,
             color = Color.Black,
             modifier = Modifier.padding(bottom = 2.dp)
         )
         Text(
-            text = "E ${"%.6f".format(lng)}",
+            text = stringResource(id = R.string.coordinate_longitude_value, lng),
             fontSize = 11.sp,
             color = Color.Black
         )

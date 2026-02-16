@@ -1,6 +1,7 @@
 package com.fengshui.app.map.poi
 
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.utils.AppLanguageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -8,7 +9,6 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
-import java.util.Locale
 import kotlin.math.cos
 
 /**
@@ -24,7 +24,7 @@ class NominatimPoiProvider : MapPoiProvider {
         radiusMeters: Int
     ): List<PoiResult> = withContext(Dispatchers.IO) {
         try {
-            val acceptLanguage = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh-CN,en" else "en,zh-CN"
+            val acceptLanguage = AppLanguageManager.nominatimAcceptLanguage()
             val encoded = URLEncoder.encode(keyword, "UTF-8")
             val base = StringBuilder("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=50")
                 .append("&accept-language=")
@@ -85,7 +85,7 @@ class NominatimPoiProvider : MapPoiProvider {
 
     override suspend fun reverseGeocode(location: UniversalLatLng): String? = withContext(Dispatchers.IO) {
         try {
-            val acceptLanguage = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh-CN,en" else "en,zh-CN"
+            val acceptLanguage = AppLanguageManager.nominatimAcceptLanguage()
             val url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${location.latitude}&lon=${location.longitude}&accept-language=${URLEncoder.encode(acceptLanguage, "UTF-8")}"
             val request = Request.Builder()
                 .url(url)

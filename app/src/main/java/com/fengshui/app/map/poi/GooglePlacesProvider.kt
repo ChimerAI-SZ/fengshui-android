@@ -1,6 +1,7 @@
 package com.fengshui.app.map.poi
 
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.utils.AppLanguageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -8,7 +9,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.util.Locale
 
 /**
  * GooglePlacesProvider based on Places API (New): places:searchText
@@ -26,7 +26,7 @@ class GooglePlacesProvider(private val apiKey: String) : MapPoiProvider {
         try {
             lastStats = ProviderSearchStats(0, 0, null)
             val mappedType = PoiTypeMapper.toGoogleType(keyword)
-            val languageCode = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) "zh-CN" else "en"
+            val languageCode = AppLanguageManager.googleLanguageCode()
             val attempts = mutableListOf<Pair<String, String?>>()
             if (mappedType != null) {
                 attempts += keyword to mappedType

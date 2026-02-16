@@ -1,6 +1,7 @@
 package com.fengshui.app.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -48,6 +51,7 @@ import com.fengshui.app.data.PointType
 import com.fengshui.app.utils.ApiKeyConfig
 import com.fengshui.app.map.ui.RegistrationDialog
 import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import com.fengshui.app.R
 import com.fengshui.app.BuildConfig
 import android.content.Context
@@ -56,6 +60,8 @@ import android.net.NetworkCapabilities
 import java.util.Locale
 import com.fengshui.app.map.abstraction.UniversalLatLng
 import com.fengshui.app.utils.RhumbLineUtils
+import com.fengshui.app.utils.AppLanguageManager
+import com.fengshui.app.utils.Prefs
 
 /**
  * SearchScreen - 地址搜索界面
@@ -123,7 +129,7 @@ fun SearchScreen(
 
     var providerName by remember {
         mutableStateOf(
-            if (Locale.getDefault().language.startsWith("zh", ignoreCase = true) && providerAmap != null) {
+            if (AppLanguageManager.isChineseLanguage(context) && providerAmap != null) {
                 context.getString(R.string.provider_amap)
             } else if (providerGoogle != null) {
                 context.getString(R.string.provider_google_places)
@@ -142,8 +148,9 @@ fun SearchScreen(
     }
 
     suspend fun runSearch(query: String): SearchRunResult {
-        val appChinese = Locale.getDefault().language.startsWith("zh", ignoreCase = true)
-        val isChinaLocale = Locale.getDefault().country.equals("CN", ignoreCase = true)
+        val appChinese = AppLanguageManager.isChineseLanguage(context)
+        val appLocale = context.resources.configuration.locales[0] ?: Locale.getDefault()
+        val isChinaLocale = appLocale.country.equals("CN", ignoreCase = true)
         val hasChineseChars = query.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN }
         val providers = buildList<Pair<String, MapPoiProvider>> {
             if (!appChinese) {
@@ -530,75 +537,150 @@ fun SearchScreen(
     }
 }
 
-/**
- * InfoScreen - 应用说明和帮助界面
- *
- * 显示：
- * - 版本号
- * - 功能说明
- * - 使用教程
- * - 技术信息
- */
 @Composable
-fun InfoScreen(
-    modifier: Modifier = Modifier
-) {
+fun SettingsScreen(modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appName = stringResource(id = R.string.app_name)
+    val buildTime = BuildConfig.BUILD_TIME_UTC.takeIf { it.isNotBlank() }
+        ?: stringResource(id = R.string.info_unknown_time)
+    val currentLanguageTag = AppLanguageManager.getCurrentLanguageTag(context)
+    val versionContent = stringResource(
+        id = R.string.info_section_version_dynamic,
+        appName,
+        BuildConfig.VERSION_NAME,
+        BuildConfig.VERSION_CODE,
+        buildTime
+    )
+    val preferenceContent = resolveDynamicInfo(
+        context = context,
+        key = "settings_preferences_content_override",
+        fallbackRes = R.string.settings_preferences_content
+    )
+    val featureContent = resolveDynamicInfo(
+        context = context,
+        key = "settings_info_features_content_override",
+        fallbackRes = R.string.info_section_features_content
+    )
+    val tipsContent = resolveDynamicInfo(
+        context = context,
+        key = "settings_info_tips_content_override",
+        fallbackRes = R.string.info_section_tips_content
+    )
+    val techContent = resolveDynamicInfo(
+        context = context,
+        key = "settings_info_tech_content_override",
+        fallbackRes = R.string.info_section_tech_content
+    )
+
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                stringResource(id = R.string.info_title),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // 版本信息
-            val appName = stringResource(id = R.string.app_name)
-            val buildTime = BuildConfig.BUILD_TIME_UTC.takeIf { it.isNotBlank() } ?: "-"
-            val versionContent = if (Locale.getDefault().language.startsWith("zh", ignoreCase = true)) {
-                "应用名：$appName\n版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n发布时间：$buildTime"
-            } else {
-                "App: $appName\nVersion: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\nRelease: $buildTime"
+            item {
+                Text(
+                    stringResource(id = R.string.nav_settings),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
             }
-            InfoSection(
-                title = stringResource(id = R.string.info_section_version_title),
-                content = versionContent
-            )
 
-            // 功能说明
-            InfoSection(
-                title = stringResource(id = R.string.info_section_features_title),
-                content = stringResource(id = R.string.info_section_features_content)
-            )
+            item {
+                SettingsSection(
+                    title = stringResource(id = R.string.settings_language_title)
+                ) {
+                    AppLanguageManager.languageOptions.forEach { option ->
+                        val selected = currentLanguageTag.equals(option.tag, ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (!selected) {
+                                        AppLanguageManager.updateLanguage(context, option.tag)
+                                    }
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = {
+                                    if (!selected) {
+                                        AppLanguageManager.updateLanguage(context, option.tag)
+                                    }
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                            Text(
+                                text = stringResource(id = option.labelRes),
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+            }
 
-            // 使用技巧
-            InfoSection(
-                title = stringResource(id = R.string.info_section_tips_title),
-                content = stringResource(id = R.string.info_section_tips_content)
-            )
+            item {
+                InfoSection(
+                    title = stringResource(id = R.string.info_section_version_title),
+                    content = versionContent
+                )
+            }
 
-            // 技术信息
-            InfoSection(
-                title = stringResource(id = R.string.info_section_tech_title),
-                content = stringResource(id = R.string.info_section_tech_content)
-            )
+            item {
+                InfoSection(
+                    title = stringResource(id = R.string.settings_preferences_title),
+                    content = preferenceContent
+                )
+            }
 
-            Text(
-                stringResource(id = R.string.info_footer),
-                fontSize = 9.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(top = 32.dp)
-            )
+            item {
+                InfoSection(
+                    title = stringResource(id = R.string.info_section_features_title),
+                    content = featureContent
+                )
+            }
+
+            item {
+                InfoSection(
+                    title = stringResource(id = R.string.info_section_tips_title),
+                    content = tipsContent
+                )
+            }
+
+            item {
+                InfoSection(
+                    title = stringResource(id = R.string.info_section_tech_title),
+                    content = techContent
+                )
+            }
+
+            item {
+                Text(
+                    stringResource(id = R.string.info_footer),
+                    fontSize = 9.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun InfoSection(title: String, content: String) {
+fun InfoScreen(modifier: Modifier = Modifier) {
+    SettingsScreen(modifier = modifier)
+}
+
+@Composable
+private fun SettingsSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -610,16 +692,36 @@ private fun InfoSection(title: String, content: String) {
             .padding(12.dp)
     ) {
         Text(
-            title,
+            text = title,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 8.dp)
         )
+        content()
+    }
+}
+
+@Composable
+private fun InfoSection(title: String, content: String) {
+    SettingsSection(title = title) {
         Text(
-            content,
+            text = content,
             fontSize = 10.sp,
             color = Color.Gray,
             lineHeight = 16.sp
         )
+    }
+}
+
+private fun resolveDynamicInfo(
+    context: Context,
+    key: String,
+    @StringRes fallbackRes: Int
+): String {
+    val override = Prefs.getString(context, key)?.trim().orEmpty()
+    return if (override.isNotBlank()) {
+        override
+    } else {
+        context.getString(fallbackRes)
     }
 }

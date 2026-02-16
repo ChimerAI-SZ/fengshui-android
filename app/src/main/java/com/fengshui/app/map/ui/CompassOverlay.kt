@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.stringArrayResource
 import com.fengshui.app.R
 
 /**
@@ -52,15 +53,8 @@ fun CompassOverlay(
 ) {
     val compassSize = sizeDp
     val density = LocalDensity.current
-    // 完整的24山名称，按罗盘顺逆序排列（北方为起点）
-    val shanNames = arrayOf(
-        "子", "癸", "丑", "艮", "寅", "甲",
-        "卯", "乙", "辰", "巽", "巳", "丙",
-        "午", "丁", "未", "坤", "申", "庚",
-        "酉", "辛", "戌", "乾", "亥", "壬"
-    )
-    
-    val baGuaNames = arrayOf("坎", "艮", "震", "巽", "离", "坤", "兑", "乾")
+    val shanNames = stringArrayResource(id = R.array.compass_shan_names)
+    val baGuaNames = stringArrayResource(id = R.array.compass_bagua_names)
     fun inwardReadableRotation(angleDeg: Float): Float {
         // Inward radial orientation.
         var rotation = angleDeg - 90f
@@ -348,7 +342,7 @@ fun CompassOverlay(
                     )
                     if (latitude != null && longitude != null) {
                         Text(
-                            text = "${"%.4f".format(latitude)}, ${"%.4f".format(longitude)}",
+                            text = stringResource(id = R.string.label_coordinates, latitude, longitude),
                             fontSize = 9.sp,
                             style = TextStyle(color = Color.Black.copy(alpha = 0.86f))
                         )

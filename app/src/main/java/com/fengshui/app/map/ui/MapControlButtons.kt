@@ -50,9 +50,9 @@ fun MapControlButtons(
         MapProviderType.AMAP -> hasAmapMap
     }
     val switchLabel = if (targetProvider == MapProviderType.GOOGLE) {
-        "切到谷歌"
+        stringResource(id = R.string.action_switch_provider_to_google)
     } else {
-        "切到高德"
+        stringResource(id = R.string.action_switch_provider_to_amap)
     }
 
     Column(

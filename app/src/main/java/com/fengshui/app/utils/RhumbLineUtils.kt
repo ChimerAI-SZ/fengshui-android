@@ -1,6 +1,8 @@
 package com.fengshui.app.utils
 
 import com.fengshui.app.data.ShanUtils
+import com.fengshui.app.data.BaGua
+import com.fengshui.app.data.WuXing
 import com.fengshui.app.map.abstraction.UniversalLatLng
 import kotlin.math.*
 
@@ -87,15 +89,9 @@ object RhumbLineUtils {
 
     fun getShanName(angle: Float): String = ShanUtils.SHAN_NAMES[getShanIndex(angle)]
 
-    // 简单八卦映射（基于中心角）
-    fun getBaGua(angle: Float): String {
-        return ShanUtils.getBaGuaByIndex(getShanIndex(angle)).label
-    }
+    fun getBaGua(angle: Float): BaGua = ShanUtils.getBaGuaByIndex(getShanIndex(angle))
 
-    // 五行简单映射（示意）
-    fun getWuXing(angle: Float): String {
-        return ShanUtils.getWuXingByIndex(getShanIndex(angle)).label
-    }
+    fun getWuXing(angle: Float): WuXing = ShanUtils.getWuXingByIndex(getShanIndex(angle))
 
     fun getReverseBearing(bearing: Float): Float = ((bearing + 180f) % 360f)
 
