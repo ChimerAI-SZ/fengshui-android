@@ -779,6 +779,34 @@ fun MapScreen(
         }
     }
 
+    fun switchProviderFromLayer(provider: MapProviderType) {
+        if (!isLayerProviderEnabled(provider)) return
+        val cameraSnapshot = buildPreferredSwitchCameraSnapshot()
+        var targetType = currentMapType
+        if (
+            provider == MapProviderType.GOOGLE &&
+            targetType == MapType.SATELLITE &&
+            hasAmapMap
+        ) {
+            val center = cameraSnapshot?.target
+            val inChina = center?.let {
+                MapProviderSelector.isInChina(it.latitude, it.longitude)
+            } == true
+            if (inChina) {
+                targetType = MapType.VECTOR
+            }
+        }
+        if (targetType != currentMapType) {
+            currentMapType = targetType
+            MapSessionStore.saveMapType(context, targetType)
+        }
+        if (provider == mapProviderType) {
+            applyMapTypeSelection(targetType)
+        } else {
+            onMapProviderSwitch(provider, cameraSnapshot)
+        }
+    }
+
     fun resetMapBearingToNorth() {
         val current = mapProvider.getCameraPosition() ?: lastKnownCameraPosition
         if (current != null && viewModel.applyCameraMove(CameraMoveSource.USER_MANUAL)) {
@@ -932,10 +960,26 @@ fun MapScreen(
             showTrialDialog = true
             return
         }
+        ui.lifeCircleData?.homePoint?.let { home ->
+            lockedLat = home.latitude
+            lockedLng = home.longitude
+            compassLocked = true
+            try {
+                val screenPos = mapProvider.latLngToScreenLocation(
+                    UniversalLatLng(home.latitude, home.longitude)
+                )
+                compassScreenPos = Offset(screenPos.x, screenPos.y)
+            } catch (_: Exception) {
+                compassScreenPos = Offset(screenWidthPx / 2f, screenHeightPx / 2f)
+            }
+        }
         ui.lifeCircleData?.let { drawLifeCircleLines(it) }
     }
 
     fun exitLifeCircleMode() {
+        compassLocked = false
+        lockedLat = null
+        lockedLng = null
         viewModel.exitLifeCircleMode()
         refreshNormalLines()
     }
@@ -1782,6 +1826,10 @@ fun MapScreen(
                 }
                 IconButton(
                     onClick = {
+                        if (ui.lifeCircleMode) {
+                            showStatus(msgCompassLocked)
+                            return@IconButton
+                        }
                         if (!compassLocked) {
                             val currentPos = mapProvider.getCameraPosition()?.target
                             if (currentPos != null) {
@@ -1798,15 +1846,15 @@ fun MapScreen(
                     },
                     modifier = Modifier
                         .background(
-                            color = if (compassLocked) Color(0xFF6A4FB5) else Color(0xEFFFFFFF),
+                            color = if (ui.lifeCircleMode || compassLocked) Color(0xFF6A4FB5) else Color(0xEFFFFFFF),
                             shape = RoundedCornerShape(12.dp)
                         )
                         .size(42.dp)
                 ) {
                     Icon(
-                        imageVector = if (compassLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                        imageVector = if (ui.lifeCircleMode || compassLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                         contentDescription = stringResource(id = R.string.action_lock_compass_toggle),
-                        tint = if (compassLocked) Color.White else Color(0xFF2A2A2A)
+                        tint = if (ui.lifeCircleMode || compassLocked) Color.White else Color(0xFF2A2A2A)
                     )
                 }
                 IconButton(
@@ -1920,6 +1968,8 @@ fun MapScreen(
                                     .graphicsLayer { alpha = if (amapEnabled) 1f else 0.45f }
                                     .clickable(enabled = amapEnabled) {
                                         layerDialogProvider = MapProviderType.AMAP
+                                        switchProviderFromLayer(MapProviderType.AMAP)
+                                        showLayerDialog = false
                                     },
                                 shape = RoundedCornerShape(16.dp),
                                 color = if (amapSelected) Color(0xFFE7F2FF) else Color(0xFFF2F3F5),
@@ -1954,6 +2004,8 @@ fun MapScreen(
                                     .graphicsLayer { alpha = if (googleEnabled) 1f else 0.45f }
                                     .clickable(enabled = googleEnabled) {
                                         layerDialogProvider = MapProviderType.GOOGLE
+                                        switchProviderFromLayer(MapProviderType.GOOGLE)
+                                        showLayerDialog = false
                                     },
                                 shape = RoundedCornerShape(16.dp),
                                 color = if (googleSelected) Color(0xFFE7F2FF) else Color(0xFFF2F3F5),
@@ -2383,7 +2435,10 @@ fun MapScreen(
                                     Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 11.sp)
                                 }
                                 SpacerSmall()
-                                Button(onClick = { ui.showSectorConfigDialog = true }, modifier = panelButtonModifier) {
+                                Button(onClick = {
+                                    closeQuickMenu()
+                                    ui.showSectorConfigDialog = true
+                                }, modifier = panelButtonModifier) {
                                     Text(stringResource(id = R.string.action_sector_search), fontSize = 11.sp)
                                 }
                                 if (originPoint != null && destPoint != null) {
@@ -2653,8 +2708,13 @@ fun MapScreen(
                             .padding(top = 12.dp, end = 12.dp)
                             .zIndex(5f)
                     ) {
-                        Button(onClick = { lifeCircleTopPanelVisible = true }) {
-                            Text(text = stringResource(id = R.string.action_show_top_panel), fontSize = 11.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(onClick = { lifeCircleTopPanelVisible = true }) {
+                                Text(text = stringResource(id = R.string.action_show_top_panel), fontSize = 11.sp)
+                            }
+                            Button(onClick = { exitLifeCircleMode() }) {
+                                Text(text = stringResource(id = R.string.action_exit), fontSize = 11.sp)
+                            }
                         }
                     }
                 }
@@ -3080,6 +3140,7 @@ fun MapScreen(
                     initialConfig = ui.lastSectorConfig,
                     hasExistingSector = ui.sectorOverlayVisible,
                     onConfirm = { config, clearBeforeDraw ->
+                        closeQuickMenu()
                         ui.showSectorConfigDialog = false
                         // Always clear previous sector and POI markers before a new sector search.
                         clearSectorArtifacts()
@@ -3158,8 +3219,8 @@ fun MapScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 148.dp, start = 12.dp, end = 12.dp)
+                        .align(Alignment.BottomStart)
+                        .padding(bottom = 92.dp, start = 12.dp, end = 12.dp)
                         .zIndex(5f)
                 ) {
                     Row(

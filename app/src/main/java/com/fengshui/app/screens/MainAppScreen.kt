@@ -30,8 +30,6 @@ import com.fengshui.app.map.abstraction.amap.AMapProvider
 import com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider
 import com.fengshui.app.navigation.NavigationItem
 import com.fengshui.app.utils.ApiKeyConfig
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -85,11 +83,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
 
     fun isProviderAvailable(providerType: MapProviderType): Boolean {
         return when (providerType) {
-            MapProviderType.GOOGLE -> {
-                val googlePlayOk = GoogleApiAvailability.getInstance()
-                    .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
-                hasGoogleMapKey && googlePlayOk
-            }
+            MapProviderType.GOOGLE -> hasGoogleMapKey
 
             MapProviderType.AMAP -> hasAmapKey
         }
@@ -98,12 +92,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     fun providerUnsupportedReason(providerType: MapProviderType): String {
         return when (providerType) {
             MapProviderType.GOOGLE -> {
-                val googlePlayOk = GoogleApiAvailability.getInstance()
-                    .isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
-                when {
-                    !hasGoogleMapKey -> context.getString(R.string.map_switch_reason_missing_google_key)
-                    !googlePlayOk -> context.getString(R.string.map_switch_reason_google_play_missing)
-                    else -> context.getString(R.string.map_switch_reason_google_env_unsupported)
+                if (!hasGoogleMapKey) {
+                    context.getString(R.string.map_switch_reason_missing_google_key)
+                } else {
+                    context.getString(R.string.map_switch_reason_google_env_unsupported)
                 }
             }
 
