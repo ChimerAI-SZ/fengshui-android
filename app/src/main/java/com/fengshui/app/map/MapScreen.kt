@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -101,8 +103,11 @@ import com.fengshui.app.utils.PermissionHelper
 import com.fengshui.app.utils.Prefs
 import com.fengshui.app.utils.ShanTextResolver
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.Button as MaterialButton
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonElevation
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -139,6 +144,7 @@ import com.fengshui.app.map.poi.NominatimPoiProvider
 import com.fengshui.app.map.poi.PoiTypeMapper
 import com.fengshui.app.map.abstraction.amap.AMapProvider
 import com.fengshui.app.utils.SensorHelper
+import androidx.compose.ui.graphics.Shape
 
 private enum class QuickMenuTarget {
     NONE,
@@ -162,6 +168,7 @@ fun MapScreen(
     onMapProviderSwitch: (MapProviderType, CameraPosition?) -> Unit,
     restoreCameraPosition: CameraPosition? = null,
     onRestoreCameraConsumed: (() -> Unit)? = null,
+    onCameraSnapshotChanged: ((CameraPosition) -> Unit)? = null,
     modifier: Modifier = Modifier,
     quickAddCaseId: String? = null,
     onQuickAddConsumed: (() -> Unit)? = null,
@@ -333,15 +340,33 @@ fun MapScreen(
     var showFirstUseGuide by remember { mutableStateOf(false) }
     var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
+    val hasStartupCameraSnapshot = remember(restoreCameraPosition, sessionSavedCameraSnapshot) {
+        fun usable(snapshot: CameraPosition?): Boolean {
+            val position = snapshot ?: return false
+            if (!position.target.latitude.isFinite() || !position.target.longitude.isFinite()) return false
+            if (!position.zoom.isFinite() || !position.bearing.isFinite()) return false
+            val looksUninitialized =
+                kotlin.math.abs(position.target.latitude) < 0.000001 &&
+                    kotlin.math.abs(position.target.longitude) < 0.000001
+            if (looksUninitialized) return false
+            if (position.zoom < 1f) return false
+            return true
+        }
+        usable(restoreCameraPosition) || usable(sessionSavedCameraSnapshot)
+    }
     var lastKnownCameraPosition by remember {
         mutableStateOf(restoreCameraPosition ?: sessionSavedCameraSnapshot)
     }
-    var pendingAutoLocateToGps by remember { mutableStateOf(true) }
+    var pendingAutoLocateToGps by remember(hasStartupCameraSnapshot) {
+        mutableStateOf(!hasStartupCameraSnapshot)
+    }
     var googleSatelliteRestrictionNotified by remember { mutableStateOf(false) }
     var gpsInitializationStartMs by remember { mutableStateOf<Long?>(null) }
     var suppressPersistUntilMs by remember { mutableStateOf(0L) }
     var mapCameraTick by remember { mutableStateOf(0L) }
-    var shouldAutoLocateOnFirstFix by remember { mutableStateOf(true) }
+    var shouldAutoLocateOnFirstFix by remember(hasStartupCameraSnapshot) {
+        mutableStateOf(!hasStartupCameraSnapshot)
+    }
     val hasLocationPermission = PermissionHelper.hasLocationPermission(context)
     val gpsInitializationBlocking = pendingAutoLocateToGps && !hasRealGps && hasLocationPermission
     val gpsInitializationTimeoutMs = 12_000L
@@ -480,17 +505,31 @@ fun MapScreen(
         statusBannerToken += 1
     }
 
+    fun isCameraSnapshotUsable(snapshot: CameraPosition?): Boolean {
+        val position = snapshot ?: return false
+        if (!position.target.latitude.isFinite() || !position.target.longitude.isFinite()) return false
+        if (!position.zoom.isFinite() || !position.bearing.isFinite()) return false
+        val looksUninitialized =
+            kotlin.math.abs(position.target.latitude) < 0.000001 &&
+                kotlin.math.abs(position.target.longitude) < 0.000001
+        if (looksUninitialized) return false
+        if (position.zoom < 1f) return false
+        return true
+    }
+
+    fun notifyCameraSnapshotChanged(position: CameraPosition?) {
+        if (!isCameraSnapshotUsable(position)) return
+        onCameraSnapshotChanged?.invoke(position!!)
+    }
+
     fun persistCameraSnapshot(position: CameraPosition?) {
         val snapshot = position ?: return
+        if (!isCameraSnapshotUsable(snapshot)) return
+        notifyCameraSnapshotChanged(snapshot)
         if (SystemClock.elapsedRealtime() < suppressPersistUntilMs) return
         if (restoreCameraPosition != null) return
         if (pendingAutoLocateToGps && !hasRealGps) return
-        val looksUninitialized =
-            kotlin.math.abs(snapshot.target.latitude) < 0.000001 &&
-                kotlin.math.abs(snapshot.target.longitude) < 0.000001
-        if (!looksUninitialized) {
-            MapSessionStore.saveCameraPosition(context, snapshot)
-        }
+        MapSessionStore.saveCameraPosition(context, snapshot)
     }
 
     LaunchedEffect(mapProviderType) {
@@ -499,7 +538,9 @@ fun MapScreen(
         }
         lastProviderType = mapProviderType
         lineByPolylineId.clear()
-        val hasRestoreSnapshot = restoreCameraPosition != null
+        val hasRestoreSnapshot = isCameraSnapshotUsable(restoreCameraPosition)
+            || isCameraSnapshotUsable(lastKnownCameraPosition)
+            || isCameraSnapshotUsable(sessionSavedCameraSnapshot)
         pendingAutoLocateToGps = !hasRestoreSnapshot
         shouldAutoLocateOnFirstFix = !hasRestoreSnapshot
     }
@@ -708,12 +749,6 @@ fun MapScreen(
                     } catch (_: Exception) {
                         compassScreenPos = Offset(screenWidthPx / 2f, screenHeightPx / 2f)
                     }
-                    if (mapReady.value) {
-                        mapProvider.animateCamera(
-                            UniversalLatLng(origin.latitude, origin.longitude),
-                            15f
-                        )
-                    }
                 } else {
                     compassLocked = false
                     lockedLat = null
@@ -733,6 +768,7 @@ fun MapScreen(
             val position = CameraPosition(target = target, zoom = zoom, bearing = currentBearing)
             mapProvider.animateCamera(position)
             lastKnownCameraPosition = position
+            notifyCameraSnapshotChanged(position)
         }
     }
 
@@ -748,24 +784,30 @@ fun MapScreen(
     }
 
     fun buildStartupCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
-        return restoreCameraPosition
-            ?: lastKnownCameraPosition
-            ?: sessionSavedCameraSnapshot
-            ?: buildCurrentGpsCameraSnapshot(defaultZoom)
-            ?: startupLastKnownLocation?.let { cached ->
-                CameraPosition(
-                    target = cached,
-                    zoom = defaultZoom,
-                    bearing = 0f
-                )
-            }
+        val cachedStartupSnapshot = startupLastKnownLocation?.let { cached ->
+            CameraPosition(
+                target = cached,
+                zoom = defaultZoom,
+                bearing = 0f
+            )
+        }
+        return listOf(
+            restoreCameraPosition,
+            sessionSavedCameraSnapshot,
+            lastKnownCameraPosition,
+            buildCurrentGpsCameraSnapshot(defaultZoom),
+            cachedStartupSnapshot
+        ).firstOrNull { isCameraSnapshotUsable(it) }
     }
 
     fun buildPreferredSwitchCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
-        return mapProvider.getCameraPosition()
-            ?: lastKnownCameraPosition
-            ?: buildCurrentGpsCameraSnapshot(defaultZoom)
-            ?: MapSessionStore.loadCameraPosition(context)
+        val candidates = listOf(
+            mapProvider.getCameraPosition(),
+            lastKnownCameraPosition,
+            buildCurrentGpsCameraSnapshot(defaultZoom),
+            MapSessionStore.loadCameraPosition(context)
+        )
+        return candidates.firstOrNull { isCameraSnapshotUsable(it) }
     }
 
     fun fallbackGoogleSatelliteToAmap(cameraSnapshot: CameraPosition?) {
@@ -1615,8 +1657,9 @@ fun MapScreen(
     DisposableEffect(mapProviderType) {
         locationHelper.start()  // 启动GPS定位
         val initCamera = mapProvider.getCameraPosition()
-        if (initCamera != null) {
+        if (isCameraSnapshotUsable(initCamera)) {
             lastKnownCameraPosition = initCamera
+            notifyCameraSnapshotChanged(initCamera)
         }
         val initBearing = initCamera?.bearing ?: 0f
         azimuth = if (mapProviderType == MapProviderType.GOOGLE) -initBearing else initBearing
@@ -1626,10 +1669,15 @@ fun MapScreen(
             val now = SystemClock.elapsedRealtime()
             if (now - ui.lastProgrammaticMoveTimestamp > 700) {
                 markUserManualCamera()
+                pendingAutoLocateToGps = false
+                shouldAutoLocateOnFirstFix = false
             }
             // Compass follows map bearing only (not device sensors).
             azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
-            lastKnownCameraPosition = cam
+            if (isCameraSnapshotUsable(cam)) {
+                lastKnownCameraPosition = cam
+                notifyCameraSnapshotChanged(cam)
+            }
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
@@ -1637,7 +1685,9 @@ fun MapScreen(
         }
         mapProvider.onCameraChangeFinish { cam ->
             azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
-            lastKnownCameraPosition = cam
+            if (isCameraSnapshotUsable(cam)) {
+                lastKnownCameraPosition = cam
+            }
             persistCameraSnapshot(cam)
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
@@ -1689,6 +1739,7 @@ fun MapScreen(
         if (mapReady.value && snapshot != null) {
             mapProvider.animateCamera(snapshot)
             lastKnownCameraPosition = snapshot
+            notifyCameraSnapshotChanged(snapshot)
             pendingAutoLocateToGps = false
             shouldAutoLocateOnFirstFix = false
             persistCameraSnapshot(snapshot)
@@ -1768,6 +1819,7 @@ fun MapScreen(
                             if (startupSnapshot != null) {
                                 mapProvider.animateCamera(startupSnapshot)
                                 lastKnownCameraPosition = startupSnapshot
+                                notifyCameraSnapshotChanged(startupSnapshot)
                             }
                             refreshLinesForDisplay()
                             refreshNormalLines()
@@ -1802,6 +1854,7 @@ fun MapScreen(
                             if (startupSnapshot != null) {
                                 mapProvider.animateCamera(startupSnapshot)
                                 lastKnownCameraPosition = startupSnapshot
+                                notifyCameraSnapshotChanged(startupSnapshot)
                             }
                             refreshLinesForDisplay()
                             refreshNormalLines()
@@ -1845,14 +1898,16 @@ fun MapScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Search,
-                                    contentDescription = stringResource(id = R.string.action_search)
+                                    contentDescription = stringResource(id = R.string.action_search),
+                                    modifier = Modifier.size(36.dp)
                                 )
                             },
                             trailingIcon = {
                                 IconButton(onClick = { runTopSearch() }) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
-                                        contentDescription = stringResource(id = R.string.action_search)
+                                        contentDescription = stringResource(id = R.string.action_search),
+                                        modifier = Modifier.size(36.dp)
                                     )
                                 }
                             },
@@ -1866,12 +1921,12 @@ fun MapScreen(
                             },
                             modifier = Modifier
                                 .padding(start = 4.dp)
-                                .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = stringResource(id = R.string.nav_settings),
-                                tint = Color(0xFF2A2A2A)
+                                tint = Color(0xFF2A2A2A),
+                                modifier = Modifier.size(36.dp)
                             )
                         }
                     }
@@ -1957,18 +2012,17 @@ fun MapScreen(
                 IconButton(
                     onClick = { showLayerDialog = true },
                     modifier = Modifier
-                        .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Layers,
-                        contentDescription = stringResource(id = R.string.action_layer_switch)
+                        contentDescription = stringResource(id = R.string.action_layer_switch),
+                        modifier = Modifier.size(36.dp)
                     )
                 }
                 IconButton(
                     onClick = { resetMapBearingToNorth() },
                     modifier = Modifier
-                        .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
                     Box(
@@ -2041,16 +2095,13 @@ fun MapScreen(
                         }
                     },
                     modifier = Modifier
-                        .background(
-                            color = if (ui.lifeCircleMode || compassLocked) Color(0xFF6A4FB5) else Color(0xEFFFFFFF),
-                            shape = RoundedCornerShape(12.dp)
-                        )
                         .size(42.dp)
                 ) {
                     Icon(
                         imageVector = if (ui.lifeCircleMode || compassLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                         contentDescription = stringResource(id = R.string.action_lock_compass_toggle),
-                        tint = if (ui.lifeCircleMode || compassLocked) Color.White else Color(0xFF2A2A2A)
+                        tint = if (ui.lifeCircleMode || compassLocked) Color.White else Color(0xFF2A2A2A),
+                        modifier = Modifier.size(36.dp)
                     )
                 }
                 IconButton(
@@ -2066,16 +2117,13 @@ fun MapScreen(
                         }
                     },
                     modifier = Modifier
-                        .background(
-                            color = if (arCompassEnabled) Color(0xFF6A4FB5) else Color(0xEFFFFFFF),
-                            shape = RoundedCornerShape(12.dp)
-                        )
                         .size(42.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.ViewInAr,
                         contentDescription = stringResource(id = R.string.action_ar_compass),
-                        tint = if (arCompassEnabled) Color.White else Color(0xFF2A2A2A)
+                        tint = if (arCompassEnabled) Color.White else Color(0xFF2A2A2A),
+                        modifier = Modifier.size(36.dp)
                     )
                 }
             }
@@ -2089,16 +2137,13 @@ fun MapScreen(
                 IconButton(
                     onClick = { onMyLocationClicked() },
                     modifier = Modifier
-                        .background(
-                            color = if (deviceDirectionMode) Color(0xFF1A73E8) else Color(0xEFFFFFFF),
-                            shape = RoundedCornerShape(12.dp)
-                        )
                         .size(44.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MyLocation,
                         contentDescription = stringResource(id = R.string.action_locate_short),
-                        tint = if (deviceDirectionMode) Color.White else Color(0xFF1A73E8)
+                        tint = if (deviceDirectionMode) Color.White else Color(0xFF1A73E8),
+                        modifier = Modifier.size(36.dp)
                     )
                 }
             }
@@ -4075,6 +4120,47 @@ private fun sectorSpanDegrees(start: Float, end: Float): Float {
     } else {
         (360f - start) + end
     }
+}
+
+@Suppress("UNUSED_PARAMETER")
+@Composable
+private fun Button(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = ButtonDefaults.shape,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+    elevation: ButtonElevation? = ButtonDefaults.buttonElevation(),
+    border: BorderStroke? = null,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    interactionSource: MutableInteractionSource? = null,
+    content: @Composable RowScope.() -> Unit
+) {
+    val contentColor = LocalContentColor.current
+    val disabledContentColor = LocalContentColor.current.copy(alpha = 0.38f)
+    MaterialButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = contentColor,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = disabledContentColor
+        ),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+            disabledElevation = 0.dp
+        ),
+        border = border,
+        contentPadding = contentPadding,
+        interactionSource = interactionSource,
+        content = content
+    )
 }
 
 @Composable

@@ -1,12 +1,15 @@
 package com.fengshui.app.screens
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -19,8 +22,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.fengshui.app.R
 import com.fengshui.app.map.MapScreen
 import com.fengshui.app.map.MapSessionStore
@@ -32,6 +38,7 @@ import com.fengshui.app.navigation.NavigationItem
 import com.fengshui.app.utils.ApiKeyConfig
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @Composable
 fun MainAppScreen(modifier: Modifier = Modifier) {
@@ -70,6 +77,15 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             }
         )
     }
+    var latestStableCameraSnapshot by remember {
+        mutableStateOf(
+            initialOneShotCamera ?: if (initialRestoreEnabled) {
+                MapSessionStore.loadCameraPosition(context)
+            } else {
+                null
+            }
+        )
+    }
 
     val initialProviderType = remember {
         MapSessionStore.loadMapProviderType(context) ?: MapProviderType.AMAP
@@ -84,10 +100,40 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         MapProviderType.GOOGLE -> googleMapProvider
     }
 
+    fun isCameraSnapshotUsable(snapshot: CameraPosition?): Boolean {
+        val position = snapshot ?: return false
+        if (!position.target.latitude.isFinite() || !position.target.longitude.isFinite()) return false
+        if (!position.zoom.isFinite() || !position.bearing.isFinite()) return false
+        val looksOriginPoint =
+            abs(position.target.latitude) < 0.000001 &&
+                abs(position.target.longitude) < 0.000001
+        if (looksOriginPoint) return false
+        if (position.zoom < 1f) return false
+        return true
+    }
+
+    fun isSameCameraSnapshot(a: CameraPosition?, b: CameraPosition?): Boolean {
+        if (a == null || b == null) return false
+        return abs(a.target.latitude - b.target.latitude) < 0.0000001 &&
+            abs(a.target.longitude - b.target.longitude) < 0.0000001 &&
+            abs(a.zoom - b.zoom) < 0.001f &&
+            abs(a.bearing - b.bearing) < 0.1f
+    }
+
+    fun cacheStableCameraSnapshot(snapshot: CameraPosition?) {
+        if (!isCameraSnapshotUsable(snapshot)) return
+        if (isSameCameraSnapshot(latestStableCameraSnapshot, snapshot)) return
+        latestStableCameraSnapshot = snapshot
+    }
+
     fun resolveCurrentCameraSnapshot(): CameraPosition? {
-        return mapProvider.getCameraPosition()
-            ?: pendingCameraToRestore
-            ?: MapSessionStore.loadCameraPosition(context)
+        val currentProviderSnapshot = mapProvider.getCameraPosition()
+        return listOf(
+            latestStableCameraSnapshot,
+            pendingCameraToRestore,
+            if (isCameraSnapshotUsable(currentProviderSnapshot)) currentProviderSnapshot else null,
+            MapSessionStore.loadCameraPosition(context)
+        ).firstOrNull { isCameraSnapshotUsable(it) }
     }
 
     fun isProviderAvailable(providerType: MapProviderType): Boolean {
@@ -121,9 +167,16 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     fun requestMapSwitchOnly(targetProvider: MapProviderType, cameraSnapshot: CameraPosition? = null) {
         if (switchingBusy || mapProviderType == targetProvider) return
         pendingTargetProvider = targetProvider
-        pendingCameraToRestore = cameraSnapshot
-            ?: mapProvider.getCameraPosition()
-            ?: MapSessionStore.loadCameraPosition(context)
+        val resolvedSnapshot = if (isCameraSnapshotUsable(cameraSnapshot)) {
+            cameraSnapshot
+        } else {
+            null
+        }
+            ?: resolveCurrentCameraSnapshot()
+        if (resolvedSnapshot != null) {
+            pendingCameraToRestore = resolvedSnapshot
+            cacheStableCameraSnapshot(resolvedSnapshot)
+        }
         val available = isProviderAvailable(targetProvider)
         pendingUnsupportedReason = if (available) "" else providerUnsupportedReason(targetProvider)
         if (available) {
@@ -132,8 +185,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                 runCatching {
                     delay(120)
                     if (pendingCameraToRestore == null) {
-                        pendingCameraToRestore = mapProvider.getCameraPosition()
-                            ?: MapSessionStore.loadCameraPosition(context)
+                        pendingCameraToRestore = resolveCurrentCameraSnapshot()
                     }
                     mapProviderTypeName = targetProvider.name
                     pendingUnsupportedReason = ""
@@ -161,8 +213,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             runCatching {
                 delay(120)
                 if (pendingCameraToRestore == null) {
-                    pendingCameraToRestore = mapProvider.getCameraPosition()
-                        ?: MapSessionStore.loadCameraPosition(context)
+                    pendingCameraToRestore = resolveCurrentCameraSnapshot()
                 }
                 mapProviderTypeName = targetProvider.name
                 pendingUnsupportedReason = ""
@@ -177,7 +228,9 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         restoreLastPositionEnabled = enabled
         MapSessionStore.setRestoreLastPositionEnabled(context, enabled)
         if (enabled) {
-            pendingCameraToRestore = MapSessionStore.loadCameraPosition(context)
+            val saved = MapSessionStore.loadCameraPosition(context)
+            pendingCameraToRestore = saved
+            cacheStableCameraSnapshot(saved)
         } else {
             pendingCameraToRestore = null
             MapSessionStore.clearCameraPosition(context)
@@ -197,6 +250,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
         bottomBar = {
             val bottomItems = listOf(
                 NavigationItem.MAP,
@@ -204,7 +258,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                 NavigationItem.CASE_OPS,
                 NavigationItem.ANALYSIS
             )
-            NavigationBar {
+            NavigationBar(
+                containerColor = Color.Transparent,
+                tonalElevation = 0.dp
+            ) {
                 bottomItems.forEach { item ->
                     NavigationBarItem(
                         selected = currentTab == item,
@@ -243,22 +300,32 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                                 else -> Unit
                             }
                         },
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = Color.Transparent
+                        ),
                         icon = {
                             Icon(
                                 imageVector = item.icon,
-                                contentDescription = stringResource(id = item.labelRes)
+                                contentDescription = stringResource(id = item.labelRes),
+                                modifier = Modifier.size(36.dp)
                             )
                         },
-                        label = { Text(stringResource(id = item.labelRes)) }
+                        label = { Text(stringResource(id = item.labelRes), fontSize = 13.sp) }
                     )
                 }
             }
         }
     ) { paddingValues ->
+        val contentPadding = when (currentTab) {
+            NavigationItem.MAP,
+            NavigationItem.CASE_OPS,
+            NavigationItem.ANALYSIS -> PaddingValues()
+            else -> paddingValues
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(contentPadding)
         ) {
             when (currentTab) {
                 NavigationItem.MAP,
@@ -274,6 +341,9 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         },
                         restoreCameraPosition = pendingCameraToRestore,
                         onRestoreCameraConsumed = { pendingCameraToRestore = null },
+                        onCameraSnapshotChanged = { snapshot ->
+                            cacheStableCameraSnapshot(snapshot)
+                        },
                         modifier = Modifier.fillMaxSize(),
                         openCaseOpsSignal = openCaseOpsSignal,
                         openAnalysisSignal = openAnalysisSignal,

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">风水工具</string>
+    <string name="app_name">堪舆图</string>
     <string name="compass_label">罗盘</string>
     <string name="map_label">地图</string>
     <string name="nav_map">地图</string>
