@@ -123,10 +123,25 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         pendingCameraToRestore = cameraSnapshot
             ?: mapProvider.getCameraPosition()
             ?: MapSessionStore.loadCameraPosition(context)
-        pendingUnsupportedReason = if (isProviderAvailable(targetProvider)) {
-            ""
-        } else {
-            providerUnsupportedReason(targetProvider)
+        val available = isProviderAvailable(targetProvider)
+        pendingUnsupportedReason = if (available) "" else providerUnsupportedReason(targetProvider)
+        if (available) {
+            switchingBusy = true
+            scope.launch {
+                runCatching {
+                    delay(120)
+                    if (pendingCameraToRestore == null) {
+                        pendingCameraToRestore = mapProvider.getCameraPosition()
+                            ?: MapSessionStore.loadCameraPosition(context)
+                    }
+                    mapProviderTypeName = targetProvider.name
+                    pendingUnsupportedReason = ""
+                }.onFailure {
+                    mapProviderTypeName = MapProviderType.AMAP.name
+                }
+                switchingBusy = false
+            }
+            return
         }
         showMapSwitchConfirmDialog = true
     }
@@ -149,6 +164,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         ?: MapSessionStore.loadCameraPosition(context)
                 }
                 mapProviderTypeName = targetProvider.name
+                pendingUnsupportedReason = ""
             }.onFailure {
                 mapProviderTypeName = MapProviderType.AMAP.name
             }
@@ -194,10 +210,24 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         onClick = {
                             currentTab = item
                             when (item) {
-                                NavigationItem.MAP -> closeQuickMenuSignal += 1
-                                NavigationItem.CASE_MANAGEMENT -> Unit
-                                NavigationItem.CASE_OPS -> openCaseOpsSignal += 1
-                                NavigationItem.ANALYSIS -> openAnalysisSignal += 1
+                                NavigationItem.MAP -> {
+                                    openCaseOpsSignal = 0
+                                    openAnalysisSignal = 0
+                                    closeQuickMenuSignal += 1
+                                }
+                                NavigationItem.CASE_MANAGEMENT -> {
+                                    openCaseOpsSignal = 0
+                                    openAnalysisSignal = 0
+                                    closeQuickMenuSignal += 1
+                                }
+                                NavigationItem.CASE_OPS -> {
+                                    openAnalysisSignal = 0
+                                    openCaseOpsSignal += 1
+                                }
+                                NavigationItem.ANALYSIS -> {
+                                    openCaseOpsSignal = 0
+                                    openAnalysisSignal += 1
+                                }
                                 else -> Unit
                             }
                         },
@@ -239,7 +269,12 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         forceRelocateSignal = forceRelocateSignal,
                         quickAddCaseId = quickAddCaseId,
                         onQuickAddConsumed = { quickAddCaseId = null },
-                        onOpenSettings = { currentTab = NavigationItem.SETTINGS }
+                        onOpenSettings = {
+                            openCaseOpsSignal = 0
+                            openAnalysisSignal = 0
+                            closeQuickMenuSignal += 1
+                            currentTab = NavigationItem.SETTINGS
+                        }
                     )
                 }
 
@@ -270,6 +305,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     }
 
     if (showMapSwitchConfirmDialog) {
+        val unsupportedOnly = pendingUnsupportedReason.isNotBlank()
         val providerLabel = if (pendingTargetProvider == MapProviderType.AMAP) {
             stringResource(id = R.string.provider_amap)
         } else {
@@ -288,22 +324,36 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             onDismissRequest = { showMapSwitchConfirmDialog = false },
             title = { Text(stringResource(id = R.string.map_switch_risk_title)) },
             text = {
-                Text("$riskText\n\n${stringResource(id = R.string.map_switch_continue_question)}")
+                if (unsupportedOnly) {
+                    Text(riskText)
+                } else {
+                    Text("$riskText\n\n${stringResource(id = R.string.map_switch_continue_question)}")
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (switchingBusy) return@TextButton
-                        applyMapSwitchSafely(pendingTargetProvider)
+                        if (!unsupportedOnly) {
+                            if (switchingBusy) return@TextButton
+                            applyMapSwitchSafely(pendingTargetProvider)
+                        }
                         showMapSwitchConfirmDialog = false
                     }
                 ) {
-                    Text(stringResource(id = R.string.map_switch_button_confirm))
+                    Text(
+                        if (unsupportedOnly) {
+                            stringResource(id = R.string.action_close)
+                        } else {
+                            stringResource(id = R.string.map_switch_button_confirm)
+                        }
+                    )
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showMapSwitchConfirmDialog = false }) {
-                    Text(stringResource(id = R.string.action_cancel))
+            dismissButton = if (unsupportedOnly) null else {
+                {
+                    TextButton(onClick = { showMapSwitchConfirmDialog = false }) {
+                        Text(stringResource(id = R.string.action_cancel))
+                    }
                 }
             }
         )

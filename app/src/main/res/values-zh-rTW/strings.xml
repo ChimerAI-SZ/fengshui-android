@@ -50,6 +50,8 @@
     <string name="action_unlock">🔓 解锁罗盘</string>
     <string name="action_locate">📍 定位</string>
     <string name="action_exit">退出</string>
+    <string name="action_hide_top_panel">隱藏上方欄</string>
+    <string name="action_show_top_panel">顯示上方欄</string>
     <string name="action_expand_collapse">展开/收起</string>
     <string name="action_start_search">开始搜索</string>
     <string name="action_draw_region">绘制区域</string>

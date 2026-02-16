@@ -22,6 +22,8 @@ import com.fengshui.app.R
 @Composable
 fun LifeCircleBanner(
     onShowInfo: () -> Unit,
+    topPanelVisible: Boolean,
+    onToggleTopPanel: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -41,6 +43,16 @@ fun LifeCircleBanner(
         )
         Spacer(modifier = Modifier.size(8.dp))
         Button(onClick = onShowInfo) { Text(stringResource(id = R.string.life_circle_show_info)) }
+        Spacer(modifier = Modifier.size(8.dp))
+        Button(onClick = onToggleTopPanel) {
+            Text(
+                text = if (topPanelVisible) {
+                    stringResource(id = R.string.action_hide_top_panel)
+                } else {
+                    stringResource(id = R.string.action_show_top_panel)
+                }
+            )
+        }
         Spacer(modifier = Modifier.weight(1f))
         Button(onClick = onExit) { Text(stringResource(id = R.string.action_exit)) }
     }

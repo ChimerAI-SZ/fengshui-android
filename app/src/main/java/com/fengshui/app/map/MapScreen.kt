@@ -306,6 +306,7 @@ fun MapScreen(
     var topSearchLoading by remember { mutableStateOf(false) }
     var topSearchResults by remember { mutableStateOf(listOf<PoiResult>()) }
     var topSearchResultsVisible by remember { mutableStateOf(false) }
+    var lifeCircleTopPanelVisible by remember { mutableStateOf(true) }
     var showSectorUnsavedOnly by remember { mutableStateOf(false) }
     var showFirstUseGuide by remember { mutableStateOf(false) }
     var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
@@ -503,6 +504,16 @@ fun MapScreen(
     LaunchedEffect(closeQuickMenuSignal) {
         if (closeQuickMenuSignal > 0) {
             closeQuickMenu()
+        }
+    }
+
+    LaunchedEffect(ui.lifeCircleMode) {
+        if (ui.lifeCircleMode) {
+            topSearchLoading = false
+            topSearchResultsVisible = false
+            lifeCircleTopPanelVisible = true
+        } else {
+            lifeCircleTopPanelVisible = true
         }
     }
 
@@ -1579,113 +1590,115 @@ fun MapScreen(
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 10.dp)
-                    .zIndex(25f)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+            if (!ui.lifeCircleMode) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 10.dp)
+                        .zIndex(25f)
                 ) {
-                    OutlinedTextField(
-                        value = topSearchInput,
-                        onValueChange = { topSearchInput = it },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { runTopSearch() }),
-                        placeholder = { Text(stringResource(id = R.string.map_top_search_hint), fontSize = 12.sp) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = stringResource(id = R.string.action_search)
-                            )
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { runTopSearch() }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = topSearchInput,
+                            onValueChange = { topSearchInput = it },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { runTopSearch() }),
+                            placeholder = { Text(stringResource(id = R.string.map_top_search_hint), fontSize = 12.sp) },
+                            leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = stringResource(id = R.string.action_search)
                                 )
-                            }
-                        },
-                        shape = RoundedCornerShape(22.dp)
-                    )
-                    IconButton(
-                        onClick = {
-                            if (onOpenSettings != null) {
-                                onOpenSettings.invoke()
-                            }
-                        },
-                        modifier = Modifier
-                            .padding(start = 4.dp)
-                            .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = stringResource(id = R.string.nav_settings),
-                            tint = Color(0xFF2A2A2A)
-                        )
-                    }
-                }
-
-                if (topSearchLoading) {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            .background(Color(0xECFFFFFF), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.search_loading),
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                if (topSearchResultsVisible) {
-                    Column(
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            .fillMaxWidth()
-                            .heightIn(max = 260.dp)
-                            .background(Color(0xF4FFFFFF), RoundedCornerShape(12.dp))
-                            .border(0.5.dp, Color(0x22000000), RoundedCornerShape(12.dp))
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
-                    ) {
-                        if (topSearchResults.isEmpty()) {
-                            Text(
-                                text = stringResource(id = R.string.search_empty),
-                                fontSize = 12.sp,
-                                color = Color.Gray
-                            )
-                        } else {
-                            topSearchResults.take(10).forEach { poi ->
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            topSearchResultsVisible = false
-                                            topSearchInput = TextFieldValue(poi.name)
-                                            val target = UniversalLatLng(poi.lat, poi.lng)
-                                            requestCameraMove(target, 16f, CameraMoveSource.SEARCH_RESULT)
-                                            showPoiMarkers(listOf(poi))
-                                        }
-                                        .padding(vertical = 6.dp)
-                                ) {
-                                    Text(text = poi.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    poi.address?.takeIf { it.isNotBlank() }?.let { address ->
-                                        Text(text = address, fontSize = 10.sp, color = Color.Gray)
-                                    }
-                                    Text(
-                                        text = stringResource(id = R.string.search_result_coordinates, poi.lat, poi.lng),
-                                        fontSize = 10.sp,
-                                        color = Color.Gray
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { runTopSearch() }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = stringResource(id = R.string.action_search)
                                     )
+                                }
+                            },
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        IconButton(
+                            onClick = {
+                                if (onOpenSettings != null) {
+                                    onOpenSettings.invoke()
+                                }
+                            },
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = stringResource(id = R.string.nav_settings),
+                                tint = Color(0xFF2A2A2A)
+                            )
+                        }
+                    }
+
+                    if (topSearchLoading) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .background(Color(0xECFFFFFF), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.search_loading),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    if (topSearchResultsVisible) {
+                        Column(
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .fillMaxWidth()
+                                .heightIn(max = 260.dp)
+                                .background(Color(0xF4FFFFFF), RoundedCornerShape(12.dp))
+                                .border(0.5.dp, Color(0x22000000), RoundedCornerShape(12.dp))
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            if (topSearchResults.isEmpty()) {
+                                Text(
+                                    text = stringResource(id = R.string.search_empty),
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            } else {
+                                topSearchResults.take(10).forEach { poi ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                topSearchResultsVisible = false
+                                                topSearchInput = TextFieldValue(poi.name)
+                                                val target = UniversalLatLng(poi.lat, poi.lng)
+                                                requestCameraMove(target, 16f, CameraMoveSource.SEARCH_RESULT)
+                                                showPoiMarkers(listOf(poi))
+                                            }
+                                            .padding(vertical = 6.dp)
+                                    ) {
+                                        Text(text = poi.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        poi.address?.takeIf { it.isNotBlank() }?.let { address ->
+                                            Text(text = address, fontSize = 10.sp, color = Color.Gray)
+                                        }
+                                        Text(
+                                            text = stringResource(id = R.string.search_result_coordinates, poi.lat, poi.lng),
+                                            fontSize = 10.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1693,10 +1706,11 @@ fun MapScreen(
                 }
             }
 
+            val rightControlsTopPadding = if (ui.lifeCircleMode && lifeCircleTopPanelVisible) 116.dp else 88.dp
             Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(end = 12.dp, top = 88.dp)
+                    .padding(end = 12.dp, top = rightControlsTopPadding)
                     .zIndex(24f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -1722,24 +1736,46 @@ fun MapScreen(
                             .size(24.dp)
                             .rotate(-azimuth)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Explore,
-                            contentDescription = stringResource(id = R.string.action_north_up),
-                            tint = Color(0xFF202124),
-                            modifier = Modifier.fillMaxSize()
-                        )
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            val w = size.width
-                            val h = size.height
-                            val northTip = Path().apply {
-                                moveTo(w * 0.5f, h * 0.08f)
-                                lineTo(w * 0.36f, h * 0.34f)
-                                lineTo(w * 0.64f, h * 0.34f)
+                            val radius = size.minDimension / 2f
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            drawCircle(
+                                color = Color(0xFF2F3136),
+                                radius = radius * 0.96f,
+                                center = center
+                            )
+                            drawCircle(
+                                color = Color(0x22000000),
+                                radius = radius * 0.96f,
+                                center = center,
+                                style = Stroke(width = radius * 0.08f)
+                            )
+
+                            val northNeedle = Path().apply {
+                                moveTo(center.x, center.y - radius * 0.86f)
+                                lineTo(center.x - radius * 0.24f, center.y + radius * 0.08f)
+                                lineTo(center.x + radius * 0.24f, center.y + radius * 0.08f)
                                 close()
                             }
                             drawPath(
-                                path = northTip,
+                                path = northNeedle,
                                 color = Color(0xFFD93025)
+                            )
+
+                            val southNeedle = Path().apply {
+                                moveTo(center.x, center.y + radius * 0.86f)
+                                lineTo(center.x - radius * 0.22f, center.y - radius * 0.04f)
+                                lineTo(center.x + radius * 0.22f, center.y - radius * 0.04f)
+                                close()
+                            }
+                            drawPath(
+                                path = southNeedle,
+                                color = Color(0xFFEFF2F6)
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = radius * 0.13f,
+                                center = center
                             )
                         }
                     }
@@ -2591,15 +2627,36 @@ fun MapScreen(
             }
 
             if (ui.lifeCircleMode) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .zIndex(4f)
-                ) {
-                    LifeCircleBanner(
-                        onShowInfo = { ui.showLifeCircleInfoDialog = true },
-                        onExit = { exitLifeCircleMode() }
-                    )
+                if (lifeCircleTopPanelVisible) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .zIndex(4f)
+                    ) {
+                        LifeCircleBanner(
+                            onShowInfo = { ui.showLifeCircleInfoDialog = true },
+                            topPanelVisible = lifeCircleTopPanelVisible,
+                            onToggleTopPanel = {
+                                lifeCircleTopPanelVisible = false
+                            },
+                            onExit = {
+                                lifeCircleTopPanelVisible = true
+                                exitLifeCircleMode()
+                            },
+                            modifier = Modifier.padding(end = 78.dp)
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 12.dp, end = 12.dp)
+                            .zIndex(5f)
+                    ) {
+                        Button(onClick = { lifeCircleTopPanelVisible = true }) {
+                            Text(text = stringResource(id = R.string.action_show_top_panel), fontSize = 11.sp)
+                        }
+                    }
                 }
 
                 val data = ui.lifeCircleData
@@ -2627,27 +2684,30 @@ fun MapScreen(
                                     azimuthDegrees = azimuth,
                                     latitude = point.latitude,
                                     longitude = point.longitude,
-                                    sizeDp = 128.dp,
-                                    showInfo = false
+                                    sizeDp = 156.dp,
+                                    showInfo = false,
+                                    labelScale = 0.78f
                                 )
                             }
                         }
                     }
 
-                    val homeLabels = buildLifeCircleLabels(data.homePoint.id)
-                    val workLabels = buildLifeCircleLabels(data.workPoint.id)
-                    val entertainmentLabels = buildLifeCircleLabels(data.entertainmentPoint.id)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 56.dp)
-                            .zIndex(4f)
-                    ) {
-                        LifeCircleLabelPanel(
-                            homeLabels = homeLabels,
-                            workLabels = workLabels,
-                            entertainmentLabels = entertainmentLabels
-                        )
+                    if (lifeCircleTopPanelVisible) {
+                        val homeLabels = buildLifeCircleLabels(data.homePoint.id)
+                        val workLabels = buildLifeCircleLabels(data.workPoint.id)
+                        val entertainmentLabels = buildLifeCircleLabels(data.entertainmentPoint.id)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 56.dp, end = 78.dp)
+                                .zIndex(4f)
+                        ) {
+                            LifeCircleLabelPanel(
+                                homeLabels = homeLabels,
+                                workLabels = workLabels,
+                                entertainmentLabels = entertainmentLabels
+                            )
+                        }
                     }
                 }
             }

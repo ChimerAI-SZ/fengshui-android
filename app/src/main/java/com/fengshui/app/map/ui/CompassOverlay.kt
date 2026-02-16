@@ -49,9 +49,11 @@ fun CompassOverlay(
     modifier: Modifier = Modifier,
     sizeDp: androidx.compose.ui.unit.Dp = 240.dp,
     centerHoleRadiusDp: androidx.compose.ui.unit.Dp = 20.dp,
-    showInfo: Boolean = true
+    showInfo: Boolean = true,
+    labelScale: Float = 1f
 ) {
     val compassSize = sizeDp
+    val safeLabelScale = labelScale.coerceIn(0.65f, 1.25f)
     val density = LocalDensity.current
     val shanNames = stringArrayResource(id = R.array.compass_shan_names)
     val baGuaNames = stringArrayResource(id = R.array.compass_bagua_names)
@@ -141,16 +143,16 @@ fun CompassOverlay(
 
                     val degreeStrokePaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
-                        textSize = with(density) { 10.sp.toPx() }
+                        textSize = with(density) { (10f * safeLabelScale).sp.toPx() }
                         textAlign = android.graphics.Paint.Align.CENTER
                         isAntiAlias = true
                         isFakeBoldText = true
                         style = android.graphics.Paint.Style.STROKE
-                        strokeWidth = with(density) { 1.8.dp.toPx() }
+                        strokeWidth = with(density) { (1.8f * safeLabelScale).dp.toPx() }
                     }
                     val degreeFillPaint = android.graphics.Paint().apply {
                         color = android.graphics.Color.BLACK
-                        textSize = with(density) { 10.sp.toPx() }
+                        textSize = with(density) { (10f * safeLabelScale).sp.toPx() }
                         textAlign = android.graphics.Paint.Align.CENTER
                         isAntiAlias = true
                         isFakeBoldText = true
@@ -245,7 +247,7 @@ fun CompassOverlay(
 
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
+                            .size((22f * safeLabelScale).dp)
                             .align(Alignment.Center)
                             .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp)
                             .rotate(textRotation),
@@ -253,7 +255,7 @@ fun CompassOverlay(
                     ) {
                         Text(
                             text = shanNames[i],
-                            fontSize = if (i % 3 == 0) 14.sp else 11.sp,
+                            fontSize = if (i % 3 == 0) (14f * safeLabelScale).sp else (11f * safeLabelScale).sp,
                             fontWeight = if (i % 3 == 0) FontWeight.Bold else FontWeight.Normal,
                             style = TextStyle(
                                 color = if (i % 3 == 0) Color(0xFFB31212) else Color.Black,
@@ -278,7 +280,7 @@ fun CompassOverlay(
 
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size((28f * safeLabelScale).dp)
                             .align(Alignment.Center)
                             .offset(x = (offsetX / density.density).dp, y = (offsetY / density.density).dp)
                             .rotate(textRotation),
@@ -286,7 +288,7 @@ fun CompassOverlay(
                     ) {
                         Text(
                             text = baGuaNames[i],
-                            fontSize = 11.sp,
+                            fontSize = (11f * safeLabelScale).sp,
                             fontWeight = FontWeight.Bold,
                             style = TextStyle(
                                 color = Color.Black,

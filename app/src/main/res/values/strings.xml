@@ -50,6 +50,8 @@
     <string name="action_unlock">🔓 Unlock Compass</string>
     <string name="action_locate">📍 Locate</string>
     <string name="action_exit">Exit</string>
+    <string name="action_hide_top_panel">Hide top panel</string>
+    <string name="action_show_top_panel">Show top panel</string>
     <string name="action_expand_collapse">Expand/Collapse</string>
     <string name="action_start_search">Start search</string>
     <string name="action_draw_region">Draw region</string>
