@@ -668,6 +668,18 @@ fun MapScreen(
         }
     }
 
+    fun switchMapProvider(target: MapProviderType) {
+        val cameraSnapshot = buildPreferredSwitchCameraSnapshot()
+        if (target == mapProviderType) {
+            cameraSnapshot?.let { snapshot ->
+                mapProvider.animateCamera(snapshot)
+                lastKnownCameraPosition = snapshot
+            }
+            return
+        }
+        onMapProviderSwitch(target, cameraSnapshot)
+    }
+
     fun resetMapBearingToNorth() {
         val current = mapProvider.getCameraPosition() ?: lastKnownCameraPosition
         if (current != null && viewModel.applyCameraMove(CameraMoveSource.USER_MANUAL)) {
@@ -1731,6 +1743,17 @@ fun MapScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(stringResource(id = R.string.map_type_satellite))
+                            }
+                            SpacerSmall()
+                            Button(
+                                onClick = {
+                                    switchMapProvider(MapProviderType.GOOGLE)
+                                    showLayerDialog = false
+                                },
+                                enabled = hasGoogleMap || mapProviderType == MapProviderType.GOOGLE,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(id = R.string.provider_google_map_full))
                             }
                         }
                     },
