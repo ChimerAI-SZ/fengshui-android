@@ -367,6 +367,7 @@ fun MapScreen(
     var shouldAutoLocateOnFirstFix by remember(hasStartupCameraSnapshot) {
         mutableStateOf(!hasStartupCameraSnapshot)
     }
+    var lastAppliedLanguageTag by remember { mutableStateOf<String?>(null) }
     val hasLocationPermission = PermissionHelper.hasLocationPermission(context)
     val gpsInitializationBlocking = pendingAutoLocateToGps && !hasRealGps && hasLocationPermission
     val gpsInitializationTimeoutMs = 12_000L
@@ -556,19 +557,31 @@ fun MapScreen(
 
     LaunchedEffect(mapReady.value, mapProviderType, currentLanguageTag) {
         if (mapReady.value) {
-            val cameraSnapshotBeforeLanguageChange = mapProvider.getCameraPosition()
-                ?: lastKnownCameraPosition
-                ?: (if (realGpsLat != null && realGpsLng != null) {
+            val shouldRecenterAfterLanguageSwitch =
+                lastAppliedLanguageTag != null && lastAppliedLanguageTag != currentLanguageTag
+            val cameraSnapshotBeforeLanguageChange = if (shouldRecenterAfterLanguageSwitch) {
+                val gpsSnapshot = if (realGpsLat != null && realGpsLng != null) {
                     CameraPosition(
                         target = UniversalLatLng(realGpsLat!!, realGpsLng!!),
-                        zoom = (mapProvider.getCameraPosition()?.zoom ?: lastKnownCameraPosition?.zoom ?: 15f),
-                        bearing = (mapProvider.getCameraPosition()?.bearing ?: lastKnownCameraPosition?.bearing ?: 0f)
+                        zoom = (lastKnownCameraPosition?.zoom ?: 15f),
+                        bearing = (lastKnownCameraPosition?.bearing ?: 0f)
                     )
                 } else {
                     null
-                })
-                ?: MapSessionStore.loadCameraPosition(context)
-            suppressPersistUntilMs = SystemClock.elapsedRealtime() + 1200L
+                }
+                listOf(
+                    restoreCameraPosition,
+                    lastKnownCameraPosition,
+                    mapProvider.getCameraPosition(),
+                    gpsSnapshot,
+                    sessionSavedCameraSnapshot
+                ).firstOrNull { isCameraSnapshotUsable(it) }
+            } else {
+                null
+            }
+            if (cameraSnapshotBeforeLanguageChange != null) {
+                suppressPersistUntilMs = SystemClock.elapsedRealtime() + 1200L
+            }
             mapProvider.setLanguageTag(currentLanguageTag)
             cameraSnapshotBeforeLanguageChange?.let { snapshot ->
                 scope.launch {
@@ -582,6 +595,7 @@ fun MapScreen(
                     persistCameraSnapshot(snapshot)
                 }
             }
+            lastAppliedLanguageTag = currentLanguageTag
         }
     }
 
@@ -1458,21 +1472,25 @@ fun MapScreen(
                 if (pointType == PointType.ORIGIN) {
                     // 文档交互：新增原点后，罗盘锁定在原点并以原点为中心。
                     lockCompassToPoint(p)
-                    requestCameraMove(
-                        UniversalLatLng(p.latitude, p.longitude),
-                        15f,
-                        CameraMoveSource.USER_POINT_SELECT
-                    )
+                    if (!continuousAddMode) {
+                        requestCameraMove(
+                            UniversalLatLng(p.latitude, p.longitude),
+                            15f,
+                            CameraMoveSource.USER_POINT_SELECT
+                        )
+                    }
                 } else {
                     // 文档交互：新增终点后，若存在原点则回到原点并锁定罗盘；若无原点仅保存终点，不强制改视角。
                     val origin = activeOriginPoint()
                     if (origin != null) {
                         lockCompassToPoint(origin)
-                        requestCameraMove(
-                            UniversalLatLng(origin.latitude, origin.longitude),
-                            15f,
-                            CameraMoveSource.USER_POINT_SELECT
-                        )
+                        if (!continuousAddMode) {
+                            requestCameraMove(
+                                UniversalLatLng(origin.latitude, origin.longitude),
+                                15f,
+                                CameraMoveSource.USER_POINT_SELECT
+                            )
+                        }
                     }
                 }
                 onPointAdded(p, pointType)
@@ -3885,7 +3903,7 @@ fun MapScreen(
                     },
                     confirmButton = {
                         Button(onClick = {
-                            val mapCenter = mapProvider.getCameraPosition()?.target
+                            val mapCenter = resolveCrosshairCenterAnchor()
                             if (mapCenter == null) {
                                 trialMessage = msgNoLocation
                                 showTrialDialog = true
@@ -3951,20 +3969,10 @@ fun MapScreen(
 
                                     if (addPointType == PointType.ORIGIN) {
                                         lockCompassToPoint(p)
-                                        requestCameraMove(
-                                            UniversalLatLng(p.latitude, p.longitude),
-                                            15f,
-                                            CameraMoveSource.USER_POINT_SELECT
-                                        )
                                     } else {
                                         val origin = activeOriginPoint()
                                         if (origin != null) {
                                             lockCompassToPoint(origin)
-                                            requestCameraMove(
-                                                UniversalLatLng(origin.latitude, origin.longitude),
-                                                15f,
-                                                CameraMoveSource.USER_POINT_SELECT
-                                            )
                                         }
                                     }
                                     onPointAdded(p, addPointType)
