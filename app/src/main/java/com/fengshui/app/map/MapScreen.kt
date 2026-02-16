@@ -163,7 +163,6 @@ fun MapScreen(
     restoreCameraPosition: CameraPosition? = null,
     onRestoreCameraConsumed: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    onCenterCrossClicked: (() -> Unit)? = null,
     quickAddCaseId: String? = null,
     onQuickAddConsumed: (() -> Unit)? = null,
     focusLocation: UniversalLatLng? = null,
@@ -292,7 +291,6 @@ fun MapScreen(
     
     var originPoint by remember { mutableStateOf<FengShuiPoint?>(null) }
     var destPoint by remember { mutableStateOf<FengShuiPoint?>(null) }
-    val lines = remember { mutableStateListOf<Pair<FengShuiPoint, FengShuiPoint>>() }
     var showLineInfo by remember { mutableStateOf(false) }
     var lineInfoSummary by remember { mutableStateOf("") }
     var lineInfoDetail by remember { mutableStateOf("") }
@@ -372,7 +370,6 @@ fun MapScreen(
     val crosshairSearchTitle = stringResource(id = R.string.crosshair_search_title)
     val crosshairSearchSubtitle = stringResource(id = R.string.crosshair_search_subtitle)
     val crosshairManualTitle = stringResource(id = R.string.crosshair_manual_title)
-    val crosshairManualSubtitle = stringResource(id = R.string.crosshair_manual_subtitle)
     val crosshairNotLocated = stringResource(id = R.string.crosshair_not_located)
     val caseNotSelected = stringResource(id = R.string.case_not_selected)
     val caseNone = stringResource(id = R.string.case_none)
@@ -401,7 +398,6 @@ fun MapScreen(
     val msgSectorReadyOpenDetails = stringResource(id = R.string.sector_ready_open_details)
     val msgArPermissionDenied = stringResource(id = R.string.ar_compass_permission_denied)
     val msgArOpenFailed = stringResource(id = R.string.ar_compass_open_failed)
-    val actionArCompass = stringResource(id = R.string.action_ar_compass)
     val msgSearchNoResult = stringResource(id = R.string.search_hint_no_result_provider)
     val msgDeviceDirectionOn = stringResource(id = R.string.status_device_direction_on)
     val msgDeviceDirectionOff = stringResource(id = R.string.status_device_direction_off)
@@ -3347,7 +3343,7 @@ fun MapScreen(
                 SectorConfigDialog(
                     initialConfig = ui.lastSectorConfig,
                     hasExistingSector = ui.sectorOverlayVisible,
-                    onConfirm = { config, clearBeforeDraw ->
+                    onConfirm = { config, _ ->
                         closeQuickMenu()
                         ui.showSectorConfigDialog = false
                         // Always clear previous sector and POI markers before a new sector search.
@@ -3853,7 +3849,7 @@ fun MapScreen(
 
                             scope.launch {
                                 try {
-                                    var project = currentProject
+                                    var project: com.fengshui.app.data.Project?
                                     if (addPointUseNewProject) {
                                         if (addPointNewProjectName.isBlank()) {
                                             trialMessage = msgEnterNewCaseName

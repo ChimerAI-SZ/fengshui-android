@@ -2,8 +2,6 @@ package com.fengshui.app.map
 
 import android.os.Bundle
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -38,7 +36,7 @@ fun GoogleMapView(
             }
         },
         modifier = modifier,
-        update = { view ->
+        update = { _ ->
             // 更新时的处理
         },
         onRelease = { view ->
