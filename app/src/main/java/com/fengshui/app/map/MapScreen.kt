@@ -94,6 +94,7 @@ import com.fengshui.app.data.ShanUtils
 import com.fengshui.app.utils.RhumbLineUtils
 import com.fengshui.app.utils.ApiKeyConfig
 import com.fengshui.app.utils.AppLanguageManager
+import com.fengshui.app.utils.PermissionHelper
 import com.fengshui.app.utils.Prefs
 import com.fengshui.app.utils.ShanTextResolver
 import androidx.compose.material3.AlertDialog
@@ -310,7 +311,10 @@ fun MapScreen(
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
     var lastKnownCameraPosition by remember { mutableStateOf<CameraPosition?>(null) }
     var pendingAutoLocateToGps by remember { mutableStateOf(true) }
-    val gpsInitializationBlocking = !hasRealGps || pendingAutoLocateToGps
+    var gpsInitializationStartMs by remember { mutableStateOf<Long?>(null) }
+    val hasLocationPermission = PermissionHelper.hasLocationPermission(context)
+    val gpsInitializationBlocking = pendingAutoLocateToGps && !hasRealGps && hasLocationPermission
+    val gpsInitializationTimeoutMs = 12_000L
 
     var showAddPointDialog by remember { mutableStateOf(false) }
     var addPointName by remember { mutableStateOf("") }
@@ -345,6 +349,8 @@ fun MapScreen(
     val msgAddOriginFailed = stringResource(id = R.string.err_add_origin_failed)
     val msgAddDestinationFailed = stringResource(id = R.string.err_add_destination_failed)
     val msgGpsGetting = stringResource(id = R.string.gps_getting)
+    val msgGpsPermissionMissingContinue = stringResource(id = R.string.status_gps_permission_missing_continue)
+    val msgGpsTimeoutContinue = stringResource(id = R.string.status_gps_timeout_continue)
     val msgNoOrigins = stringResource(id = R.string.err_no_origin_points)
     val msgNoDestinations = stringResource(id = R.string.no_destination_tip)
     val msgNeedThreeOrigins = stringResource(id = R.string.err_need_three_origins)
@@ -489,6 +495,42 @@ fun MapScreen(
     LaunchedEffect(closeQuickMenuSignal) {
         if (closeQuickMenuSignal > 0) {
             closeQuickMenu()
+        }
+    }
+
+    LaunchedEffect(mapReady.value, pendingAutoLocateToGps, hasLocationPermission, hasRealGps) {
+        if (!mapReady.value) return@LaunchedEffect
+        if (!pendingAutoLocateToGps) {
+            gpsInitializationStartMs = null
+            return@LaunchedEffect
+        }
+        if (hasRealGps) {
+            gpsInitializationStartMs = null
+            return@LaunchedEffect
+        }
+        if (!hasLocationPermission) {
+            pendingAutoLocateToGps = false
+            gpsInitializationStartMs = null
+            showStatus(msgGpsPermissionMissingContinue)
+            return@LaunchedEffect
+        }
+        if (gpsInitializationStartMs == null) {
+            gpsInitializationStartMs = SystemClock.elapsedRealtime()
+        }
+    }
+
+    LaunchedEffect(gpsInitializationStartMs, pendingAutoLocateToGps, hasRealGps, hasLocationPermission) {
+        val start = gpsInitializationStartMs ?: return@LaunchedEffect
+        if (!pendingAutoLocateToGps || hasRealGps || !hasLocationPermission) return@LaunchedEffect
+        val elapsed = SystemClock.elapsedRealtime() - start
+        val remaining = (gpsInitializationTimeoutMs - elapsed).coerceAtLeast(0L)
+        if (remaining > 0L) {
+            delay(remaining)
+        }
+        if (pendingAutoLocateToGps && !hasRealGps && hasLocationPermission) {
+            pendingAutoLocateToGps = false
+            gpsInitializationStartMs = null
+            showStatus(msgGpsTimeoutContinue)
         }
     }
 
@@ -2615,6 +2657,20 @@ fun MapScreen(
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 11.sp
                         )
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Button(
+                            onClick = {
+                                pendingAutoLocateToGps = false
+                                gpsInitializationStartMs = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.action_continue_without_gps),
+                                color = Color(0xFF222222),
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             }

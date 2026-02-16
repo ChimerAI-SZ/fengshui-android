@@ -62,6 +62,7 @@
     <string name="action_create_case_and_save">新建案例并保存</string>
     <string name="action_undo">撤销</string>
     <string name="action_continue_add">继续加点</string>
+    <string name="action_continue_without_gps">先進入地圖</string>
     <string name="action_stop_add">停止加点</string>
     <string name="continuous_add_name_title">请输入点位名称</string>
     <string name="continuous_add_map_move_hint">可拖动地图移动十字准星，再保存下一个点位。</string>
@@ -315,6 +316,8 @@
     <string name="coordinate_longitude_value">经度：%1$.6f</string>
     <string name="sector_distance_preset_km">%1$dkm</string>
     <string name="status_located_current_position">已定位到当前位置</string>
+    <string name="status_gps_permission_missing_continue">未授予定位權限，已進入地圖，可稍後手動定位。</string>
+    <string name="status_gps_timeout_continue">GPS定位逾時，已進入地圖，可稍後手動定位。</string>
     <string name="status_device_direction_on">已開啟設備方向模式</string>
     <string name="status_device_direction_off">已關閉設備方向模式</string>
     <string name="status_map_north_up">地圖已回正北</string>
