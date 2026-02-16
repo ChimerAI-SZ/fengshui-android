@@ -107,7 +107,6 @@ import androidx.compose.material3.Button as MaterialButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonElevation
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -1939,6 +1938,7 @@ fun MapScreen(
                             },
                             modifier = Modifier
                                 .padding(start = 4.dp)
+                                .background(Color(0xF5FFFFFF), RoundedCornerShape(12.dp))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
@@ -2030,6 +2030,7 @@ fun MapScreen(
                 IconButton(
                     onClick = { showLayerDialog = true },
                     modifier = Modifier
+                        .background(Color(0xF5FFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
                     Icon(
@@ -2041,6 +2042,7 @@ fun MapScreen(
                 IconButton(
                     onClick = { resetMapBearingToNorth() },
                     modifier = Modifier
+                        .background(Color(0xF5FFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
                     Box(
@@ -2113,12 +2115,13 @@ fun MapScreen(
                         }
                     },
                     modifier = Modifier
+                        .background(Color(0xF5FFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
                     Icon(
                         imageVector = if (ui.lifeCircleMode || compassLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                         contentDescription = stringResource(id = R.string.action_lock_compass_toggle),
-                        tint = if (ui.lifeCircleMode || compassLocked) Color.White else Color(0xFF2A2A2A),
+                        tint = if (ui.lifeCircleMode || compassLocked) Color(0xFF6A4FB5) else Color(0xFF2A2A2A),
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -2135,12 +2138,13 @@ fun MapScreen(
                         }
                     },
                     modifier = Modifier
+                        .background(Color(0xF5FFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.ViewInAr,
                         contentDescription = stringResource(id = R.string.action_ar_compass),
-                        tint = if (arCompassEnabled) Color.White else Color(0xFF2A2A2A),
+                        tint = if (arCompassEnabled) Color(0xFF6A4FB5) else Color(0xFF2A2A2A),
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -2155,12 +2159,13 @@ fun MapScreen(
                 IconButton(
                     onClick = { onMyLocationClicked() },
                     modifier = Modifier
+                        .background(Color(0xF5FFFFFF), RoundedCornerShape(12.dp))
                         .size(44.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MyLocation,
                         contentDescription = stringResource(id = R.string.action_locate_short),
-                        tint = if (deviceDirectionMode) Color.White else Color(0xFF1A73E8),
+                        tint = Color(0xFF1A73E8),
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -2534,23 +2539,6 @@ fun MapScreen(
                     }
                     .zIndex(2f)  // 高于地图
                 ) {}
-            }
-
-            if (continuousAddMode && ui.crosshairMode) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 164.dp, start = 16.dp, end = 16.dp)
-                        .zIndex(4f)
-                        .background(Color(0xE62B2B2B), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.continuous_add_map_move_hint),
-                        color = Color.White,
-                        fontSize = 12.sp
-                    )
-                }
             }
 
             if (quickMenuTarget != QuickMenuTarget.NONE) {
@@ -4137,33 +4125,31 @@ private fun Button(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     shape: Shape = ButtonDefaults.shape,
-    colors: ButtonColors = ButtonDefaults.buttonColors(),
-    elevation: ButtonElevation? = ButtonDefaults.buttonElevation(),
+    colors: ButtonColors = ButtonDefaults.buttonColors(
+        containerColor = Color(0xF5FFFFFF),
+        contentColor = Color(0xFF2A2A2A),
+        disabledContainerColor = Color(0xFFECECEC),
+        disabledContentColor = Color(0xFF8A8A8A)
+    ),
+    elevation: ButtonElevation? = ButtonDefaults.buttonElevation(
+        defaultElevation = 0.dp,
+        pressedElevation = 0.dp,
+        focusedElevation = 0.dp,
+        hoveredElevation = 0.dp,
+        disabledElevation = 0.dp
+    ),
     border: BorderStroke? = null,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit
 ) {
-    val contentColor = LocalContentColor.current
-    val disabledContentColor = LocalContentColor.current.copy(alpha = 0.38f)
     MaterialButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
         shape = shape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = contentColor,
-            disabledContainerColor = Color.Transparent,
-            disabledContentColor = disabledContentColor
-        ),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp,
-            focusedElevation = 0.dp,
-            hoveredElevation = 0.dp,
-            disabledElevation = 0.dp
-        ),
+        colors = colors,
+        elevation = elevation,
         border = border,
         contentPadding = contentPadding,
         interactionSource = interactionSource,

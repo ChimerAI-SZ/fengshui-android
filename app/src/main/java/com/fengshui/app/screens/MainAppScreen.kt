@@ -1,7 +1,6 @@
 package com.fengshui.app.screens
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -259,8 +258,8 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                 NavigationItem.ANALYSIS
             )
             NavigationBar(
-                containerColor = Color.Transparent,
-                tonalElevation = 0.dp
+                containerColor = Color(0xF5FFFFFF),
+                tonalElevation = 6.dp
             ) {
                 bottomItems.forEach { item ->
                     NavigationBarItem(
@@ -301,7 +300,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent
+                            indicatorColor = Color(0x166A4FB5)
                         ),
                         icon = {
                             Icon(
@@ -316,16 +315,10 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
             }
         }
     ) { paddingValues ->
-        val contentPadding = when (currentTab) {
-            NavigationItem.MAP,
-            NavigationItem.CASE_OPS,
-            NavigationItem.ANALYSIS -> PaddingValues()
-            else -> paddingValues
-        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(contentPadding)
+                .padding(paddingValues)
         ) {
             when (currentTab) {
                 NavigationItem.MAP,
