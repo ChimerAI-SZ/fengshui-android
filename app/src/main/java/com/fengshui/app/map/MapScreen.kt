@@ -31,6 +31,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -131,7 +134,6 @@ import com.fengshui.app.utils.SensorHelper
 
 private enum class QuickMenuTarget {
     NONE,
-    CASE_MANAGEMENT,
     CASE_OPS,
     ANALYSIS
 }
@@ -142,6 +144,7 @@ private enum class QuickMenuTarget {
  * - 屏幕中心十字准心
  * - 右侧放大/缩小/图层切换控件（使用 `MapControlButtons`）
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     mapProvider: MapProvider,
@@ -157,7 +160,6 @@ fun MapScreen(
     onQuickAddConsumed: (() -> Unit)? = null,
     focusLocation: UniversalLatLng? = null,
     onFocusConsumed: (() -> Unit)? = null,
-    openCaseManagementSignal: Int = 0,
     openCaseOpsSignal: Int = 0,
     openAnalysisSignal: Int = 0,
     closeQuickMenuSignal: Int = 0,
@@ -279,6 +281,7 @@ fun MapScreen(
     val scope = rememberCoroutineScope()
     var quickMenuTarget by remember { mutableStateOf(QuickMenuTarget.NONE) }
     val quickMenuScrollState = rememberScrollState()
+    val quickSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var arCompassEnabled by remember { mutableStateOf(false) }
     val destinationColorIndexById = remember { mutableStateMapOf<String, Int>() }
     val poiByMarkerId = remember { mutableMapOf<String, PoiResult>() }
@@ -416,10 +419,6 @@ fun MapScreen(
         }
     }
 
-    fun openCaseManagementMenu() {
-        quickMenuTarget = QuickMenuTarget.CASE_MANAGEMENT
-    }
-
     fun openCaseOpsMenu() {
         quickMenuTarget = QuickMenuTarget.CASE_OPS
     }
@@ -466,12 +465,6 @@ fun MapScreen(
         if (statusBannerMessage != null) {
             delay(2000)
             statusBannerMessage = null
-        }
-    }
-
-    LaunchedEffect(openCaseManagementSignal) {
-        if (openCaseManagementSignal > 0) {
-            openCaseManagementMenu()
         }
     }
 
@@ -1201,7 +1194,6 @@ fun MapScreen(
         addPointUseNewProject = false
         addPointNewProjectName = ""
         showAddPointDialog = true
-        openCaseManagementMenu()
         onQuickAddConsumed?.invoke()
     }
     
@@ -1520,8 +1512,6 @@ fun MapScreen(
                         onClick = {
                             if (onOpenSettings != null) {
                                 onOpenSettings.invoke()
-                            } else {
-                                openCaseManagementMenu()
                             }
                         },
                         modifier = Modifier
@@ -1936,67 +1926,95 @@ fun MapScreen(
 
             if (quickMenuTarget != QuickMenuTarget.NONE) {
                 val panelTitle = when (quickMenuTarget) {
-                    QuickMenuTarget.CASE_MANAGEMENT -> stringResource(id = R.string.nav_case_management)
                     QuickMenuTarget.CASE_OPS -> stringResource(id = R.string.nav_case_ops)
                     QuickMenuTarget.ANALYSIS -> stringResource(id = R.string.nav_analysis)
                     QuickMenuTarget.NONE -> ""
                 }
 
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 8.dp, top = 52.dp)
-                        .zIndex(2f)
-                        .width(220.dp)
-                        .background(Color(0xEFFFFFFF), RoundedCornerShape(16.dp))
-                        .border(0.5.dp, Color(0x16000000), RoundedCornerShape(16.dp))
-                        .padding(8.dp)
+                ModalBottomSheet(
+                    onDismissRequest = { closeQuickMenu() },
+                    sheetState = quickSheetState,
+                    containerColor = Color(0xFFFDFDFD)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = panelTitle,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Button(
-                            onClick = { closeQuickMenu() },
-                            modifier = Modifier
-                                .width(58.dp)
-                                .heightIn(min = 36.dp)
-                                .shadow(4.dp, RoundedCornerShape(10.dp)),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
-                        ) {
-                            Text(stringResource(id = R.string.menu_collapse_short), fontSize = 10.sp)
-                        }
-                    }
-
-                    SpacerSmall()
-
-                    val panelButtonModifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 40.dp)
-
                     Column(
                         modifier = Modifier
-                            .heightIn(max = 500.dp)
+                            .fillMaxWidth()
+                            .heightIn(max = 430.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                             .verticalScroll(quickMenuScrollState)
                     ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = panelTitle,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { closeQuickMenu() }) {
+                                Text(stringResource(id = R.string.action_close), fontSize = 12.sp)
+                            }
+                        }
+
+                        SpacerSmall()
+
+                        val panelButtonModifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
+
                         when (quickMenuTarget) {
-                            QuickMenuTarget.CASE_MANAGEMENT -> {
+                            QuickMenuTarget.CASE_OPS -> {
+                                Text(
+                                    text = stringResource(id = R.string.subsection_case_select),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF666666)
+                                )
+                                SpacerSmall()
                                 Button(onClick = { showProjectSelectDialog = true }, modifier = panelButtonModifier) {
                                     Text(
                                         stringResource(
                                             id = R.string.label_case_with_name,
                                             currentProject?.name ?: caseNone
                                         ),
-                                        fontSize = 10.sp
+                                        fontSize = 11.sp
                                     )
                                 }
+                                SpacerSmall()
+                                Button(onClick = {
+                                    if (originPoints.isEmpty()) {
+                                        trialMessage = msgNoOrigins
+                                        showTrialDialog = true
+                                    } else {
+                                        showOriginSelectDialog = true
+                                    }
+                                }, modifier = panelButtonModifier) {
+                                    Text(stringResource(id = R.string.action_select_origin), fontSize = 11.sp)
+                                }
+                                SpacerSmall()
+                                Button(onClick = {
+                                    if (currentProject == null) {
+                                        trialMessage = msgSelectCase
+                                        showTrialDialog = true
+                                    } else if (destPoints.isEmpty()) {
+                                        trialMessage = msgNoDestinations
+                                        showTrialDialog = true
+                                    } else {
+                                        showDestinationSelectDialog = true
+                                    }
+                                }, modifier = panelButtonModifier) {
+                                    Text(actionSelectDestination, fontSize = 11.sp)
+                                }
+
+                                Spacer(modifier = Modifier.size(10.dp))
+                                Text(
+                                    text = stringResource(id = R.string.subsection_case_edit),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF666666)
+                                )
                                 SpacerSmall()
                                 Button(onClick = {
                                     addPointName = ""
@@ -2007,68 +2025,6 @@ fun MapScreen(
                                     showAddPointDialog = true
                                 }, modifier = panelButtonModifier) {
                                     Text(stringResource(id = R.string.action_add_point), fontSize = 11.sp)
-                                }
-                                SpacerSmall()
-                                Button(onClick = {
-                                    if (originPoints.isEmpty()) {
-                                        trialMessage = msgNoOrigins
-                                        showTrialDialog = true
-                                    } else {
-                                        showOriginSelectDialog = true
-                                    }
-                                }, modifier = panelButtonModifier) {
-                                    Text(stringResource(id = R.string.action_select_origin), fontSize = 11.sp)
-                                }
-                                SpacerSmall()
-                                Button(onClick = {
-                                    if (currentProject == null) {
-                                        trialMessage = msgSelectCase
-                                        showTrialDialog = true
-                                    } else if (destPoints.isEmpty()) {
-                                        trialMessage = msgNoDestinations
-                                        showTrialDialog = true
-                                    } else {
-                                        showDestinationSelectDialog = true
-                                    }
-                                }, modifier = panelButtonModifier) {
-                                    Text(actionSelectDestination, fontSize = 11.sp)
-                                }
-                            }
-
-                            QuickMenuTarget.CASE_OPS -> {
-                                Button(onClick = { showProjectSelectDialog = true }, modifier = panelButtonModifier) {
-                                    Text(
-                                        stringResource(
-                                            id = R.string.label_case_with_name,
-                                            currentProject?.name ?: caseNone
-                                        ),
-                                        fontSize = 10.sp
-                                    )
-                                }
-                                SpacerSmall()
-                                Button(onClick = {
-                                    if (originPoints.isEmpty()) {
-                                        trialMessage = msgNoOrigins
-                                        showTrialDialog = true
-                                    } else {
-                                        showOriginSelectDialog = true
-                                    }
-                                }, modifier = panelButtonModifier) {
-                                    Text(stringResource(id = R.string.action_select_origin), fontSize = 11.sp)
-                                }
-                                SpacerSmall()
-                                Button(onClick = {
-                                    if (currentProject == null) {
-                                        trialMessage = msgSelectCase
-                                        showTrialDialog = true
-                                    } else if (destPoints.isEmpty()) {
-                                        trialMessage = msgNoDestinations
-                                        showTrialDialog = true
-                                    } else {
-                                        showDestinationSelectDialog = true
-                                    }
-                                }, modifier = panelButtonModifier) {
-                                    Text(actionSelectDestination, fontSize = 11.sp)
                                 }
                                 SpacerSmall()
                                 Button(onClick = { continuousAddMode = !continuousAddMode }, modifier = panelButtonModifier) {
@@ -2093,6 +2049,13 @@ fun MapScreen(
                             }
 
                             QuickMenuTarget.ANALYSIS -> {
+                                Text(
+                                    text = stringResource(id = R.string.subsection_analysis_core),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF666666)
+                                )
+                                SpacerSmall()
                                 Button(onClick = {
                                     if (originPoints.size < 3) {
                                         trialMessage = msgNeedThreeOrigins
@@ -2103,11 +2066,11 @@ fun MapScreen(
                                     lifeCircleWorkId = null
                                     lifeCircleWizardStep = 1
                                 }, modifier = panelButtonModifier) {
-                                    Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 10.sp)
+                                    Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 11.sp)
                                 }
                                 SpacerSmall()
                                 Button(onClick = { ui.showSectorConfigDialog = true }, modifier = panelButtonModifier) {
-                                    Text(stringResource(id = R.string.action_sector_search), fontSize = 10.sp)
+                                    Text(stringResource(id = R.string.action_sector_search), fontSize = 11.sp)
                                 }
                                 if (originPoint != null && destPoint != null) {
                                     SpacerSmall()
@@ -2153,13 +2116,15 @@ fun MapScreen(
                                         lineInfoExpanded = false
                                         showLineInfo = true
                                     }, modifier = panelButtonModifier) {
-                                        Text(stringResource(id = R.string.action_show_line_info), fontSize = 10.sp)
+                                        Text(stringResource(id = R.string.action_show_line_info), fontSize = 11.sp)
                                     }
                                 }
                             }
 
                             QuickMenuTarget.NONE -> Unit
                         }
+
+                        Spacer(modifier = Modifier.size(8.dp))
                     }
                 }
             }

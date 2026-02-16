@@ -38,11 +38,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainAppScreen(modifier: Modifier = Modifier) {
     var currentTab by remember { mutableStateOf(NavigationItem.MAP) }
-    var openCaseManagementSignal by remember { mutableStateOf(0) }
     var openCaseOpsSignal by remember { mutableStateOf(0) }
     var openAnalysisSignal by remember { mutableStateOf(0) }
     var closeQuickMenuSignal by remember { mutableStateOf(0) }
     var forceRelocateSignal by remember { mutableStateOf(0) }
+    var quickAddCaseId by remember { mutableStateOf<String?>(null) }
 
     var showMapSwitchConfirmDialog by remember { mutableStateOf(false) }
     var pendingTargetProvider by remember { mutableStateOf(MapProviderType.AMAP) }
@@ -192,7 +192,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                             currentTab = item
                             when (item) {
                                 NavigationItem.MAP -> closeQuickMenuSignal += 1
-                                NavigationItem.CASE_MANAGEMENT -> openCaseManagementSignal += 1
+                                NavigationItem.CASE_MANAGEMENT -> Unit
                                 NavigationItem.CASE_OPS -> openCaseOpsSignal += 1
                                 NavigationItem.ANALYSIS -> openAnalysisSignal += 1
                                 else -> Unit
@@ -217,7 +217,6 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         ) {
             when (currentTab) {
                 NavigationItem.MAP,
-                NavigationItem.CASE_MANAGEMENT,
                 NavigationItem.CASE_OPS,
                 NavigationItem.ANALYSIS -> {
                     MapScreen(
@@ -231,12 +230,23 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         restoreCameraPosition = pendingCameraToRestore,
                         onRestoreCameraConsumed = { pendingCameraToRestore = null },
                         modifier = Modifier.fillMaxSize(),
-                        openCaseManagementSignal = openCaseManagementSignal,
                         openCaseOpsSignal = openCaseOpsSignal,
                         openAnalysisSignal = openAnalysisSignal,
                         closeQuickMenuSignal = closeQuickMenuSignal,
                         forceRelocateSignal = forceRelocateSignal,
+                        quickAddCaseId = quickAddCaseId,
+                        onQuickAddConsumed = { quickAddCaseId = null },
                         onOpenSettings = { currentTab = NavigationItem.SETTINGS }
+                    )
+                }
+
+                NavigationItem.CASE_MANAGEMENT -> {
+                    CaseListScreen(
+                        modifier = Modifier.fillMaxSize(),
+                        onQuickAddPoint = { caseId ->
+                            quickAddCaseId = caseId
+                            currentTab = NavigationItem.MAP
+                        }
                     )
                 }
 
