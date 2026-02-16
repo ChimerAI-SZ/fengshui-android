@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.AlertDialog
@@ -59,6 +60,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import java.util.Locale
 import com.fengshui.app.map.abstraction.UniversalLatLng
+import com.fengshui.app.map.MapSessionStore
 import com.fengshui.app.utils.RhumbLineUtils
 import com.fengshui.app.utils.AppLanguageManager
 import com.fengshui.app.utils.Prefs
@@ -538,7 +540,12 @@ fun SearchScreen(
 }
 
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    modifier: Modifier = Modifier,
+    restoreLastMapPositionEnabled: Boolean? = null,
+    onRestoreLastMapPositionEnabledChange: ((Boolean) -> Unit)? = null,
+    onRelocateNow: (() -> Unit)? = null
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val appName = stringResource(id = R.string.app_name)
     val buildTime = BuildConfig.BUILD_TIME_UTC.takeIf { it.isNotBlank() }
@@ -571,6 +578,31 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         key = "settings_info_tech_content_override",
         fallbackRes = R.string.info_section_tech_content
     )
+    var localRestoreEnabled by remember {
+        mutableStateOf(MapSessionStore.isRestoreLastPositionEnabled(context))
+    }
+    val restoreEnabled = restoreLastMapPositionEnabled ?: localRestoreEnabled
+
+    fun updateRestoreEnabled(enabled: Boolean) {
+        if (onRestoreLastMapPositionEnabledChange != null) {
+            onRestoreLastMapPositionEnabledChange.invoke(enabled)
+        } else {
+            localRestoreEnabled = enabled
+            MapSessionStore.setRestoreLastPositionEnabled(context, enabled)
+            if (!enabled) {
+                MapSessionStore.clearCameraPosition(context)
+            }
+        }
+    }
+
+    fun relocateNow() {
+        if (onRelocateNow != null) {
+            onRelocateNow.invoke()
+        } else {
+            MapSessionStore.clearCameraPosition(context)
+            updateRestoreEnabled(false)
+        }
+    }
 
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
@@ -632,10 +664,58 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
 
             item {
-                InfoSection(
+                SettingsSection(
                     title = stringResource(id = R.string.settings_preferences_title),
-                    content = preferenceContent
-                )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.settings_map_restore_toggle_title),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (restoreEnabled) {
+                                    stringResource(id = R.string.settings_map_restore_status_enabled)
+                                } else {
+                                    stringResource(id = R.string.settings_map_restore_status_disabled)
+                                },
+                                fontSize = 11.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        Switch(
+                            checked = restoreEnabled,
+                            onCheckedChange = { enabled ->
+                                updateRestoreEnabled(enabled)
+                            }
+                        )
+                    }
+
+                    Button(
+                        onClick = { relocateNow() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        Text(text = stringResource(id = R.string.settings_map_relocate_now))
+                    }
+
+                    Text(
+                        text = preferenceContent,
+                        fontSize = 10.sp,
+                        color = Color.Gray,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
             }
 
             item {

@@ -11,6 +11,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.fengshui.app.R
 import com.fengshui.app.map.MapScreen
+import com.fengshui.app.map.MapSessionStore
 import com.fengshui.app.map.abstraction.CameraPosition
 import com.fengshui.app.map.abstraction.MapProviderType
 import com.fengshui.app.map.abstraction.amap.AMapProvider
@@ -36,12 +38,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainAppScreen(modifier: Modifier = Modifier) {
     var currentTab by remember { mutableStateOf(NavigationItem.MAP) }
+    var openCaseManagementSignal by remember { mutableStateOf(0) }
     var openCaseOpsSignal by remember { mutableStateOf(0) }
     var openAnalysisSignal by remember { mutableStateOf(0) }
+    var closeQuickMenuSignal by remember { mutableStateOf(0) }
+    var forceRelocateSignal by remember { mutableStateOf(0) }
 
     var showMapSwitchConfirmDialog by remember { mutableStateOf(false) }
     var pendingTargetProvider by remember { mutableStateOf(MapProviderType.AMAP) }
-    var pendingCameraToRestore by remember { mutableStateOf<CameraPosition?>(null) }
     var pendingUnsupportedReason by remember { mutableStateOf("") }
     var switchingBusy by remember { mutableStateOf(false) }
 
@@ -52,7 +56,24 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     val hasGoogleMapKey = ApiKeyConfig.isValidKey(googleKey)
     val hasAmapKey = ApiKeyConfig.isValidKey(amapKey)
 
-    var mapProviderTypeName by rememberSaveable { mutableStateOf(MapProviderType.AMAP.name) }
+    val initialRestoreEnabled = remember {
+        MapSessionStore.isRestoreLastPositionEnabled(context)
+    }
+    var restoreLastPositionEnabled by rememberSaveable { mutableStateOf(initialRestoreEnabled) }
+    var pendingCameraToRestore by remember {
+        mutableStateOf(
+            if (initialRestoreEnabled) {
+                MapSessionStore.loadCameraPosition(context)
+            } else {
+                null
+            }
+        )
+    }
+
+    val initialProviderType = remember {
+        MapSessionStore.loadMapProviderType(context) ?: MapProviderType.AMAP
+    }
+    var mapProviderTypeName by rememberSaveable { mutableStateOf(initialProviderType.name) }
     val mapProviderType = runCatching { MapProviderType.valueOf(mapProviderTypeName) }
         .getOrDefault(MapProviderType.AMAP)
     val googleMapProvider = remember { GoogleMapProvider(context) }
@@ -132,16 +153,46 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    fun updateRestorePreference(enabled: Boolean) {
+        restoreLastPositionEnabled = enabled
+        MapSessionStore.setRestoreLastPositionEnabled(context, enabled)
+        if (enabled) {
+            pendingCameraToRestore = MapSessionStore.loadCameraPosition(context)
+        } else {
+            pendingCameraToRestore = null
+            MapSessionStore.clearCameraPosition(context)
+        }
+    }
+
+    fun relocateNowFromSettings() {
+        MapSessionStore.clearCameraPosition(context)
+        pendingCameraToRestore = null
+        currentTab = NavigationItem.MAP
+        forceRelocateSignal += 1
+    }
+
+    LaunchedEffect(mapProviderType) {
+        MapSessionStore.saveMapProviderType(context, mapProviderType)
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
+            val bottomItems = listOf(
+                NavigationItem.MAP,
+                NavigationItem.CASE_MANAGEMENT,
+                NavigationItem.CASE_OPS,
+                NavigationItem.ANALYSIS
+            )
             NavigationBar {
-                NavigationItem.values().forEach { item ->
+                bottomItems.forEach { item ->
                     NavigationBarItem(
                         selected = currentTab == item,
                         onClick = {
                             currentTab = item
                             when (item) {
+                                NavigationItem.MAP -> closeQuickMenuSignal += 1
+                                NavigationItem.CASE_MANAGEMENT -> openCaseManagementSignal += 1
                                 NavigationItem.CASE_OPS -> openCaseOpsSignal += 1
                                 NavigationItem.ANALYSIS -> openAnalysisSignal += 1
                                 else -> Unit
@@ -166,6 +217,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         ) {
             when (currentTab) {
                 NavigationItem.MAP,
+                NavigationItem.CASE_MANAGEMENT,
                 NavigationItem.CASE_OPS,
                 NavigationItem.ANALYSIS -> {
                     MapScreen(
@@ -179,14 +231,26 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         restoreCameraPosition = pendingCameraToRestore,
                         onRestoreCameraConsumed = { pendingCameraToRestore = null },
                         modifier = Modifier.fillMaxSize(),
+                        openCaseManagementSignal = openCaseManagementSignal,
                         openCaseOpsSignal = openCaseOpsSignal,
                         openAnalysisSignal = openAnalysisSignal,
+                        closeQuickMenuSignal = closeQuickMenuSignal,
+                        forceRelocateSignal = forceRelocateSignal,
                         onOpenSettings = { currentTab = NavigationItem.SETTINGS }
                     )
                 }
 
                 NavigationItem.SETTINGS -> {
-                    SettingsScreen(modifier = Modifier.fillMaxSize())
+                    SettingsScreen(
+                        modifier = Modifier.fillMaxSize(),
+                        restoreLastMapPositionEnabled = restoreLastPositionEnabled,
+                        onRestoreLastMapPositionEnabledChange = { enabled ->
+                            updateRestorePreference(enabled)
+                        },
+                        onRelocateNow = {
+                            relocateNowFromSettings()
+                        }
+                    )
                 }
             }
         }

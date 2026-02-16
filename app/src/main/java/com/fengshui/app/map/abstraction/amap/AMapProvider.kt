@@ -35,6 +35,7 @@ class AMapProvider(
     private var cameraChangeCallback: ((CameraPosition) -> Unit)? = null
     private var polylineClickCallback: ((UniversalPolyline) -> Unit)? = null
     private var markerClickCallback: ((UniversalMarker) -> Unit)? = null
+    private var pendingLanguageTag: String? = null
     
     /**
      * 设置底层 AMap 对象（由 MapViewWrapper 在地图加载完成后调用）
@@ -42,7 +43,9 @@ class AMapProvider(
     fun setAMap(map: AMap) {
         mAMap = map
         registerCameraChangeListener()
+        registerMarkerClickListener()
         registerPolylineClickListener()
+        pendingLanguageTag?.let { setLanguageTag(it) }
     }
     
     /**
@@ -210,6 +213,17 @@ class AMapProvider(
         }
         mAMap!!.mapType = mapType
     }
+
+    override fun setLanguageTag(languageTag: String) {
+        pendingLanguageTag = languageTag
+        val map = mAMap ?: return
+        val amapLanguage = if (languageTag.startsWith("en", ignoreCase = true)) {
+            AMap.ENGLISH
+        } else {
+            AMap.CHINESE
+        }
+        map.setMapLanguage(amapLanguage)
+    }
     
     /**
      * 放大
@@ -244,7 +258,7 @@ class AMapProvider(
     /**
      * 清除所有标记
      */
-    fun clearMarkers() {
+    override fun clearMarkers() {
         markers.values.forEach { it.remove() }
         markers.clear()
         markerIdByRef.clear()
@@ -253,7 +267,7 @@ class AMapProvider(
     /**
      * 清除所有折线
      */
-    fun clearPolylines() {
+    override fun clearPolylines() {
         polylines.values.forEach { it.remove() }
         polylines.clear()
         polylineIdByRef.clear()
@@ -262,12 +276,12 @@ class AMapProvider(
     /**
      * 注册折线点击监听
      */
-    fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
+    override fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
         polylineClickCallback = callback
         registerPolylineClickListener()
     }
 
-    fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {
+    override fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {
         markerClickCallback = callback
         registerMarkerClickListener()
     }

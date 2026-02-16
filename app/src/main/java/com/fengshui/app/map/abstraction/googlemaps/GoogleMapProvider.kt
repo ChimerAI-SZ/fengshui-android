@@ -225,6 +225,11 @@ class GoogleMapProvider(
         }
         googleMap.mapType = targetMapType
     }
+
+    override fun setLanguageTag(languageTag: String) {
+        // Google Maps Android SDK does not provide a runtime map-label language API.
+        // Map labels follow device/app locale and Google service behavior.
+    }
     
     /**
      * 放大
@@ -259,7 +264,7 @@ class GoogleMapProvider(
     /**
      * 清除所有标记
      */
-    fun clearMarkers() {
+    override fun clearMarkers() {
         markers.values.forEach { it.remove() }
         markers.clear()
         markerIdByRef.clear()
@@ -268,7 +273,7 @@ class GoogleMapProvider(
     /**
      * 清除所有折线
      */
-    fun clearPolylines() {
+    override fun clearPolylines() {
         polylines.values.forEach { it.remove() }
         polylines.clear()
         polylineIdByRef.clear()
@@ -277,12 +282,12 @@ class GoogleMapProvider(
     /**
      * 注册折线点击监听
      */
-    fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
+    override fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {
         polylineClickCallback = callback
         registerPolylineClickListener()
     }
 
-    fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {
+    override fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {
         markerClickCallback = callback
         registerMarkerClickListener()
     }

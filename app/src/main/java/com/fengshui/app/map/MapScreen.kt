@@ -129,6 +129,13 @@ import com.fengshui.app.map.poi.PoiTypeMapper
 import com.fengshui.app.map.abstraction.amap.AMapProvider
 import com.fengshui.app.utils.SensorHelper
 
+private enum class QuickMenuTarget {
+    NONE,
+    CASE_MANAGEMENT,
+    CASE_OPS,
+    ANALYSIS
+}
+
 /**
  * 简易 MapScreen 示例：
  * - 占位地图区域（后续替换为真正的 MapView/MapCompose）
@@ -150,17 +157,23 @@ fun MapScreen(
     onQuickAddConsumed: (() -> Unit)? = null,
     focusLocation: UniversalLatLng? = null,
     onFocusConsumed: (() -> Unit)? = null,
+    openCaseManagementSignal: Int = 0,
     openCaseOpsSignal: Int = 0,
     openAnalysisSignal: Int = 0,
+    closeQuickMenuSignal: Int = 0,
+    forceRelocateSignal: Int = 0,
     onOpenSettings: (() -> Unit)? = null
 ) {
-    var currentMapType by remember { mutableStateOf(MapType.VECTOR) }
+    val context = LocalContext.current
+    val currentLanguageTag = AppLanguageManager.getCurrentLanguageTag(context)
+    var currentMapType by remember {
+        mutableStateOf(MapSessionStore.loadMapType(context) ?: MapType.VECTOR)
+    }
     var compassLocked by remember { mutableStateOf(false) }  // 罗盘锁定状态
     var compassScreenPos by remember { mutableStateOf(Offset(0f, 0f)) }  // 锁定时罗盘在屏幕上的位置
     var lockedLat by remember { mutableStateOf<Double?>(null) }  // 锁定位置的纬度
     var lockedLng by remember { mutableStateOf<Double?>(null) }  // 锁定位置的经度
     var lastCompassUpdateMs by remember { mutableStateOf(0L) }
-    val context = LocalContext.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
@@ -264,8 +277,8 @@ fun MapScreen(
     val selectedDestinationIds = remember { mutableStateListOf<String>() }
     val pendingDestinationIds = remember { mutableStateListOf<String>() }
     val scope = rememberCoroutineScope()
-    var sideBarExpanded by remember { mutableStateOf(false) }
-    val sidebarScrollState = rememberScrollState()
+    var quickMenuTarget by remember { mutableStateOf(QuickMenuTarget.NONE) }
+    val quickMenuScrollState = rememberScrollState()
     var arCompassEnabled by remember { mutableStateOf(false) }
     val destinationColorIndexById = remember { mutableStateMapOf<String, Int>() }
     val poiByMarkerId = remember { mutableMapOf<String, PoiResult>() }
@@ -305,13 +318,6 @@ fun MapScreen(
     var showPostSaveQuickActions by remember { mutableStateOf(false) }
     var lastAddedPoint by remember { mutableStateOf<FengShuiPoint?>(null) }
     var lastAddedPointType by remember { mutableStateOf(PointType.ORIGIN) }
-    var sectionMapToolsExpanded by remember { mutableStateOf(false) }
-    var sectionCaseExpanded by remember { mutableStateOf(false) }
-    var sectionAnalysisExpanded by remember { mutableStateOf(false) }
-    var subMapCompassExpanded by remember { mutableStateOf(false) }
-    var subCaseSelectionExpanded by remember { mutableStateOf(false) }
-    var subCaseEditExpanded by remember { mutableStateOf(false) }
-    var subAnalysisCoreExpanded by remember { mutableStateOf(false) }
     var lifeCircleWizardStep by remember { mutableStateOf(0) } // 0 none, 1 home, 2 work, 3 entertainment
     var lifeCircleHomeId by remember { mutableStateOf<String?>(null) }
     var lifeCircleWorkId by remember { mutableStateOf<String?>(null) }
@@ -371,9 +377,6 @@ fun MapScreen(
     val msgUndo = stringResource(id = R.string.action_undo)
     val msgContinueAdd = stringResource(id = R.string.action_continue_add)
     val msgContinueAddHint = stringResource(id = R.string.crosshair_continue_add_subtitle)
-    val sectionMapTools = stringResource(id = R.string.section_map_tools)
-    val sectionCaseOps = stringResource(id = R.string.section_case_ops)
-    val sectionAnalysis = stringResource(id = R.string.section_analysis)
     val actionContinuousAddModeOn = stringResource(id = R.string.action_continuous_add_on)
     val actionContinuousAddModeOff = stringResource(id = R.string.action_continuous_add_off)
     val actionContinuousCurrentType = stringResource(
@@ -413,32 +416,35 @@ fun MapScreen(
         }
     }
 
-    fun openSidebarCollapsed() {
-        sectionMapToolsExpanded = false
-        sectionCaseExpanded = false
-        sectionAnalysisExpanded = false
-        subMapCompassExpanded = false
-        subCaseSelectionExpanded = false
-        subCaseEditExpanded = false
-        subAnalysisCoreExpanded = false
-        sideBarExpanded = true
+    fun openCaseManagementMenu() {
+        quickMenuTarget = QuickMenuTarget.CASE_MANAGEMENT
     }
 
-    fun openCaseOpsSidebar() {
-        openSidebarCollapsed()
-        sectionCaseExpanded = true
-        subCaseSelectionExpanded = true
+    fun openCaseOpsMenu() {
+        quickMenuTarget = QuickMenuTarget.CASE_OPS
     }
 
-    fun openAnalysisSidebar() {
-        openSidebarCollapsed()
-        sectionAnalysisExpanded = true
-        subAnalysisCoreExpanded = true
+    fun openAnalysisMenu() {
+        quickMenuTarget = QuickMenuTarget.ANALYSIS
+    }
+
+    fun closeQuickMenu() {
+        quickMenuTarget = QuickMenuTarget.NONE
     }
 
     fun showStatus(message: String) {
         statusBannerMessage = message
         statusBannerToken += 1
+    }
+
+    fun persistCameraSnapshot(position: CameraPosition?) {
+        val snapshot = position ?: return
+        val looksUninitialized =
+            kotlin.math.abs(snapshot.target.latitude) < 0.000001 &&
+                kotlin.math.abs(snapshot.target.longitude) < 0.000001
+        if (!looksUninitialized) {
+            MapSessionStore.saveCameraPosition(context, snapshot)
+        }
     }
 
     LaunchedEffect(mapProviderType) {
@@ -450,6 +456,12 @@ fun MapScreen(
         pendingAutoLocateToGps = restoreCameraPosition == null
     }
 
+    LaunchedEffect(mapReady.value, mapProviderType, currentLanguageTag) {
+        if (mapReady.value) {
+            mapProvider.setLanguageTag(currentLanguageTag)
+        }
+    }
+
     LaunchedEffect(statusBannerToken) {
         if (statusBannerMessage != null) {
             delay(2000)
@@ -457,15 +469,27 @@ fun MapScreen(
         }
     }
 
+    LaunchedEffect(openCaseManagementSignal) {
+        if (openCaseManagementSignal > 0) {
+            openCaseManagementMenu()
+        }
+    }
+
     LaunchedEffect(openCaseOpsSignal) {
         if (openCaseOpsSignal > 0) {
-            openCaseOpsSidebar()
+            openCaseOpsMenu()
         }
     }
 
     LaunchedEffect(openAnalysisSignal) {
         if (openAnalysisSignal > 0) {
-            openAnalysisSidebar()
+            openAnalysisMenu()
+        }
+    }
+
+    LaunchedEffect(closeQuickMenuSignal) {
+        if (closeQuickMenuSignal > 0) {
+            closeQuickMenu()
         }
     }
 
@@ -615,6 +639,7 @@ fun MapScreen(
     fun applyMapTypeSelection(type: MapType) {
         val cameraSnapshot = buildPreferredSwitchCameraSnapshot()
         currentMapType = type
+        MapSessionStore.saveMapType(context, type)
         if (
             type == MapType.SATELLITE &&
             mapProviderType == MapProviderType.GOOGLE &&
@@ -697,6 +722,16 @@ fun MapScreen(
         }
     }
 
+    LaunchedEffect(forceRelocateSignal) {
+        if (forceRelocateSignal > 0) {
+            pendingAutoLocateToGps = true
+            suppressAutoLocateOnce = false
+            if (realGpsLat != null && realGpsLng != null) {
+                locateToCurrentAndNorth()
+            }
+        }
+    }
+
     fun runTopSearch() {
         val keyword = topSearchInput.text.trim()
         if (keyword.isBlank()) {
@@ -751,8 +786,7 @@ fun MapScreen(
     }
 
     fun drawLifeCircleLines(data: LifeCircleData) {
-        val provider = mapProvider as? com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider
-        provider?.clearPolylines()
+        mapProvider.clearPolylines()
         lineByPolylineId.clear()
 
         val pairs = listOf(
@@ -796,16 +830,14 @@ fun MapScreen(
     }
 
     fun clearPoiMarkers() {
-        (mapProvider as? com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider)?.clearMarkers()
-        (mapProvider as? AMapProvider)?.clearMarkers()
+        mapProvider.clearMarkers()
         poiByMarkerId.clear()
     }
 
     fun renderPointMarkers(clearExisting: Boolean = true) {
         if (ui.lifeCircleMode) return
         if (clearExisting) {
-            (mapProvider as? com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider)?.clearMarkers()
-            (mapProvider as? AMapProvider)?.clearMarkers()
+            mapProvider.clearMarkers()
         }
 
         originPoints.forEach { point ->
@@ -1157,7 +1189,7 @@ fun MapScreen(
         addPointUseNewProject = false
         addPointNewProjectName = ""
         showAddPointDialog = true
-        openSidebarCollapsed()
+        openCaseManagementMenu()
         onQuickAddConsumed?.invoke()
     }
     
@@ -1168,10 +1200,7 @@ fun MapScreen(
         }
         if (mapReady.value) {
             // 清除旧的polylines
-            val provider = mapProvider as? com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider
-            provider?.clearPolylines()
-            val amapProvider = mapProvider as? AMapProvider
-            amapProvider?.clearPolylines()
+            mapProvider.clearPolylines()
             lineByPolylineId.clear()
             
             // 添加所有新的连线
@@ -1263,6 +1292,7 @@ fun MapScreen(
         mapProvider.onCameraChangeFinish { cam ->
             azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
             lastKnownCameraPosition = cam
+            persistCameraSnapshot(cam)
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
@@ -1314,6 +1344,7 @@ fun MapScreen(
             suppressAutoLocateOnce = true
             mapProvider.animateCamera(snapshot)
             lastKnownCameraPosition = snapshot
+            persistCameraSnapshot(snapshot)
             pendingAutoLocateToGps = false
             onRestoreCameraConsumed?.invoke()
             delay(300)
@@ -1478,7 +1509,7 @@ fun MapScreen(
                             if (onOpenSettings != null) {
                                 onOpenSettings.invoke()
                             } else {
-                                openSidebarCollapsed()
+                                openCaseManagementMenu()
                             }
                         },
                         modifier = Modifier
@@ -1562,21 +1593,6 @@ fun MapScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 IconButton(
-                    onClick = { onMyLocationClicked() },
-                    modifier = Modifier
-                        .background(
-                            color = if (deviceDirectionMode) Color(0xFF1A73E8) else Color(0xEFFFFFFF),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .size(42.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = stringResource(id = R.string.action_locate_short),
-                        tint = if (deviceDirectionMode) Color.White else Color(0xFF1A73E8)
-                    )
-                }
-                IconButton(
                     onClick = { showLayerDialog = true },
                     modifier = Modifier
                         .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
@@ -1651,6 +1667,29 @@ fun MapScreen(
                         imageVector = Icons.Default.ViewInAr,
                         contentDescription = stringResource(id = R.string.action_ar_compass),
                         tint = if (arCompassEnabled) Color.White else Color(0xFF2A2A2A)
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 84.dp)
+                    .zIndex(24f)
+            ) {
+                IconButton(
+                    onClick = { onMyLocationClicked() },
+                    modifier = Modifier
+                        .background(
+                            color = if (deviceDirectionMode) Color(0xFF1A73E8) else Color(0xEFFFFFFF),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MyLocation,
+                        contentDescription = stringResource(id = R.string.action_locate_short),
+                        tint = if (deviceDirectionMode) Color.White else Color(0xFF1A73E8)
                     )
                 }
             }
@@ -1872,33 +1911,38 @@ fun MapScreen(
                 }
             }
 
-            // 右侧侧边栏展开时允许地图继续拖动，避免误导用户“地图不可操作”。
+            if (quickMenuTarget != QuickMenuTarget.NONE) {
+                val panelTitle = when (quickMenuTarget) {
+                    QuickMenuTarget.CASE_MANAGEMENT -> stringResource(id = R.string.nav_case_management)
+                    QuickMenuTarget.CASE_OPS -> stringResource(id = R.string.nav_case_ops)
+                    QuickMenuTarget.ANALYSIS -> stringResource(id = R.string.nav_analysis)
+                    QuickMenuTarget.NONE -> ""
+                }
 
-            if (sideBarExpanded) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = 8.dp, top = 52.dp)
                         .zIndex(2f)
-                        .width(138.dp)
+                        .width(220.dp)
                         .background(Color(0xEFFFFFFF), RoundedCornerShape(16.dp))
                         .border(0.5.dp, Color(0x16000000), RoundedCornerShape(16.dp))
-                        .padding(7.dp)
+                        .padding(8.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = stringResource(id = R.string.menu_open),
+                            text = panelTitle,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f)
                         )
                         Button(
-                            onClick = { sideBarExpanded = false },
+                            onClick = { closeQuickMenu() },
                             modifier = Modifier
-                                .width(54.dp)
+                                .width(58.dp)
                                 .heightIn(min = 36.dp)
                                 .shadow(4.dp, RoundedCornerShape(10.dp)),
                             shape = RoundedCornerShape(12.dp),
@@ -1909,102 +1953,67 @@ fun MapScreen(
                     }
 
                     SpacerSmall()
-                    Button(
-                        onClick = { locateToCurrentPosition(showBanner = true, source = CameraMoveSource.USER_MANUAL) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 40.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4FB5))
-                    ) {
-                        Text(stringResource(id = R.string.action_locate_short), fontSize = 11.sp)
-                    }
-                    SpacerSmall()
+
+                    val panelButtonModifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 40.dp)
+
                     Column(
                         modifier = Modifier
                             .heightIn(max = 500.dp)
-                            .verticalScroll(sidebarScrollState)
+                            .verticalScroll(quickMenuScrollState)
                     ) {
-                        val sectionButtonModifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 44.dp)
-                        val subHeaderModifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 8.dp)
-                            .heightIn(min = 40.dp)
-                        val subButtonModifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp)
-                            .heightIn(min = 40.dp)
-                        SidebarSectionHeader(
-                            title = sectionMapTools,
-                            expanded = sectionMapToolsExpanded,
-                            onToggle = { sectionMapToolsExpanded = !sectionMapToolsExpanded },
-                            modifier = sectionButtonModifier
-                        )
-                        if (sectionMapToolsExpanded) {
-                            SidebarSubSectionHeader(
-                                title = stringResource(id = R.string.subsection_compass_tools),
-                                expanded = subMapCompassExpanded,
-                                onToggle = { subMapCompassExpanded = !subMapCompassExpanded },
-                                modifier = subHeaderModifier
-                            )
-                            if (subMapCompassExpanded) {
-                                Button(onClick = {
-                                    if (!compassLocked) {
-                                        val currentPos = mapProvider.getCameraPosition()?.target
-                                        if (currentPos != null) {
-                                            lockCompassToLatLng(currentPos.latitude, currentPos.longitude)
-                                            showStatus(msgCompassLocked)
-                                        } else {
-                                            trialMessage = msgNoLocation
-                                            showTrialDialog = true
-                                        }
-                                    } else {
-                                        unlockCompass()
-                                        showStatus(msgCompassUnlocked)
-                                    }
-                                }, modifier = subButtonModifier) {
+                        when (quickMenuTarget) {
+                            QuickMenuTarget.CASE_MANAGEMENT -> {
+                                Button(onClick = { showProjectSelectDialog = true }, modifier = panelButtonModifier) {
                                     Text(
-                                        if (compassLocked) stringResource(id = R.string.action_unlock) else stringResource(id = R.string.action_lock),
-                                        fontSize = 11.sp
+                                        stringResource(
+                                            id = R.string.label_case_with_name,
+                                            currentProject?.name ?: caseNone
+                                        ),
+                                        fontSize = 10.sp
                                     )
                                 }
                                 SpacerSmall()
                                 Button(onClick = {
-                                    val granted = ContextCompat.checkSelfPermission(
-                                        context,
-                                        android.Manifest.permission.CAMERA
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                    if (granted) {
-                                        arCompassEnabled = true
-                                    } else {
-                                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
-                                    }
-                                }, modifier = subButtonModifier) {
-                                    Text(actionArCompass, fontSize = 11.sp)
+                                    addPointName = ""
+                                    addPointType = continuousAddType
+                                    addPointProjectId = currentProject?.id
+                                    addPointUseNewProject = false
+                                    addPointNewProjectName = ""
+                                    showAddPointDialog = true
+                                }, modifier = panelButtonModifier) {
+                                    Text(stringResource(id = R.string.action_add_point), fontSize = 11.sp)
                                 }
                                 SpacerSmall()
+                                Button(onClick = {
+                                    if (originPoints.isEmpty()) {
+                                        trialMessage = msgNoOrigins
+                                        showTrialDialog = true
+                                    } else {
+                                        showOriginSelectDialog = true
+                                    }
+                                }, modifier = panelButtonModifier) {
+                                    Text(stringResource(id = R.string.action_select_origin), fontSize = 11.sp)
+                                }
+                                SpacerSmall()
+                                Button(onClick = {
+                                    if (currentProject == null) {
+                                        trialMessage = msgSelectCase
+                                        showTrialDialog = true
+                                    } else if (destPoints.isEmpty()) {
+                                        trialMessage = msgNoDestinations
+                                        showTrialDialog = true
+                                    } else {
+                                        showDestinationSelectDialog = true
+                                    }
+                                }, modifier = panelButtonModifier) {
+                                    Text(actionSelectDestination, fontSize = 11.sp)
+                                }
                             }
 
-                            SpacerSmall()
-                        }
-
-                        SidebarSectionHeader(
-                            title = sectionCaseOps,
-                            expanded = sectionCaseExpanded,
-                            onToggle = { sectionCaseExpanded = !sectionCaseExpanded },
-                            modifier = sectionButtonModifier
-                        )
-                        if (sectionCaseExpanded) {
-                            SidebarSubSectionHeader(
-                                title = stringResource(id = R.string.subsection_case_select),
-                                expanded = subCaseSelectionExpanded,
-                                onToggle = { subCaseSelectionExpanded = !subCaseSelectionExpanded },
-                                modifier = subHeaderModifier
-                            )
-                            if (subCaseSelectionExpanded) {
-                                Button(onClick = { showProjectSelectDialog = true }, modifier = subButtonModifier) {
+                            QuickMenuTarget.CASE_OPS -> {
+                                Button(onClick = { showProjectSelectDialog = true }, modifier = panelButtonModifier) {
                                     Text(
                                         stringResource(
                                             id = R.string.label_case_with_name,
@@ -2021,7 +2030,7 @@ fun MapScreen(
                                     } else {
                                         showOriginSelectDialog = true
                                     }
-                                }, modifier = subButtonModifier) {
+                                }, modifier = panelButtonModifier) {
                                     Text(stringResource(id = R.string.action_select_origin), fontSize = 11.sp)
                                 }
                                 SpacerSmall()
@@ -2035,31 +2044,11 @@ fun MapScreen(
                                     } else {
                                         showDestinationSelectDialog = true
                                     }
-                                }, modifier = subButtonModifier) {
+                                }, modifier = panelButtonModifier) {
                                     Text(actionSelectDestination, fontSize = 11.sp)
                                 }
                                 SpacerSmall()
-                            }
-
-                            SidebarSubSectionHeader(
-                                title = stringResource(id = R.string.subsection_case_edit),
-                                expanded = subCaseEditExpanded,
-                                onToggle = { subCaseEditExpanded = !subCaseEditExpanded },
-                                modifier = subHeaderModifier
-                            )
-                            if (subCaseEditExpanded) {
-                                Button(onClick = {
-                                    addPointName = ""
-                                    addPointType = continuousAddType
-                                    addPointProjectId = currentProject?.id
-                                    addPointUseNewProject = false
-                                    addPointNewProjectName = ""
-                                    showAddPointDialog = true
-                                }, modifier = subButtonModifier) {
-                                    Text(stringResource(id = R.string.action_add_point), fontSize = 11.sp)
-                                }
-                                SpacerSmall()
-                                Button(onClick = { continuousAddMode = !continuousAddMode }, modifier = subButtonModifier) {
+                                Button(onClick = { continuousAddMode = !continuousAddMode }, modifier = panelButtonModifier) {
                                     Text(
                                         if (continuousAddMode) actionContinuousAddModeOn else actionContinuousAddModeOff,
                                         fontSize = 11.sp
@@ -2068,31 +2057,19 @@ fun MapScreen(
                                 SpacerSmall()
                                 Button(
                                     onClick = {
-                                        continuousAddType = if (continuousAddType == PointType.ORIGIN) PointType.DESTINATION else PointType.ORIGIN
+                                        continuousAddType = if (continuousAddType == PointType.ORIGIN) {
+                                            PointType.DESTINATION
+                                        } else {
+                                            PointType.ORIGIN
+                                        }
                                     },
-                                    modifier = subButtonModifier
+                                    modifier = panelButtonModifier
                                 ) {
                                     Text(actionContinuousCurrentType, fontSize = 10.sp)
                                 }
-                                SpacerSmall()
                             }
-                            SpacerSmall()
-                        }
 
-                        SidebarSectionHeader(
-                            title = sectionAnalysis,
-                            expanded = sectionAnalysisExpanded,
-                            onToggle = { sectionAnalysisExpanded = !sectionAnalysisExpanded },
-                            modifier = sectionButtonModifier
-                        )
-                        if (sectionAnalysisExpanded) {
-                            SidebarSubSectionHeader(
-                                title = stringResource(id = R.string.subsection_analysis_core),
-                                expanded = subAnalysisCoreExpanded,
-                                onToggle = { subAnalysisCoreExpanded = !subAnalysisCoreExpanded },
-                                modifier = subHeaderModifier
-                            )
-                            if (subAnalysisCoreExpanded) {
+                            QuickMenuTarget.ANALYSIS -> {
                                 Button(onClick = {
                                     if (originPoints.size < 3) {
                                         trialMessage = msgNeedThreeOrigins
@@ -2102,22 +2079,32 @@ fun MapScreen(
                                     lifeCircleHomeId = null
                                     lifeCircleWorkId = null
                                     lifeCircleWizardStep = 1
-                                }, modifier = subButtonModifier) {
+                                }, modifier = panelButtonModifier) {
                                     Text(stringResource(id = R.string.action_life_circle_mode), fontSize = 10.sp)
                                 }
                                 SpacerSmall()
-                                Button(onClick = { ui.showSectorConfigDialog = true }, modifier = subButtonModifier) {
+                                Button(onClick = { ui.showSectorConfigDialog = true }, modifier = panelButtonModifier) {
                                     Text(stringResource(id = R.string.action_sector_search), fontSize = 10.sp)
                                 }
                                 if (originPoint != null && destPoint != null) {
                                     SpacerSmall()
                                     Button(onClick = {
-                                        val bearing = RhumbLineUtils.calculateRhumbBearing(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
+                                        val bearing = RhumbLineUtils.calculateRhumbBearing(
+                                            originPoint!!.latitude,
+                                            originPoint!!.longitude,
+                                            destPoint!!.latitude,
+                                            destPoint!!.longitude
+                                        )
                                         val shanIndex = RhumbLineUtils.getShanIndex(bearing)
                                         val shan = ShanTextResolver.shanName(context, shanIndex)
                                         val bagua = ShanTextResolver.baguaName(context, ShanUtils.getBaGuaByIndex(shanIndex))
                                         val wuxing = ShanTextResolver.wuxingName(context, ShanUtils.getWuXingByIndex(shanIndex))
-                                        val dist = RhumbLineUtils.haversineDistanceMeters(originPoint!!.latitude, originPoint!!.longitude, destPoint!!.latitude, destPoint!!.longitude)
+                                        val dist = RhumbLineUtils.haversineDistanceMeters(
+                                            originPoint!!.latitude,
+                                            originPoint!!.longitude,
+                                            destPoint!!.latitude,
+                                            destPoint!!.longitude
+                                        )
                                         lineInfoSummary = context.getString(
                                             R.string.line_info_summary,
                                             originPoint!!.name,
@@ -2142,10 +2129,13 @@ fun MapScreen(
                                         )
                                         lineInfoExpanded = false
                                         showLineInfo = true
-                                    }, modifier = subButtonModifier) { Text(stringResource(id = R.string.action_show_line_info), fontSize = 10.sp) }
+                                    }, modifier = panelButtonModifier) {
+                                        Text(stringResource(id = R.string.action_show_line_info), fontSize = 10.sp)
+                                    }
                                 }
-                                SpacerSmall()
                             }
+
+                            QuickMenuTarget.NONE -> Unit
                         }
                     }
                 }
@@ -3284,7 +3274,7 @@ fun MapScreen(
                                         }
                                     }
                                     onPointAdded(p, addPointType)
-                                    sideBarExpanded = false
+                                    closeQuickMenu()
 
                                     showAddPointDialog = false
                                 } catch (e: Exception) {

@@ -28,7 +28,12 @@ interface MapProvider {
     fun onCameraChange(callback: (CameraPosition) -> Unit)
     fun onCameraChangeFinish(callback: (CameraPosition) -> Unit)
     fun setMapType(type: MapType)
+    fun setLanguageTag(languageTag: String) {}
     fun zoomIn()
     fun zoomOut()
     fun getCameraPosition(): CameraPosition?  // 获取当前相机位置（地图中心）
+    fun clearMarkers() {}
+    fun clearPolylines() {}
+    fun setOnPolylineClickListener(callback: (UniversalPolyline) -> Unit) {}
+    fun setOnMarkerClickListener(callback: (UniversalMarker) -> Unit) {}
 }

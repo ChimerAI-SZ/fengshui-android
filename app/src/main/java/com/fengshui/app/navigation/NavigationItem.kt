@@ -19,6 +19,7 @@ enum class NavigationItem(
     val icon: ImageVector
 ) {
     MAP("map", R.string.nav_map, Icons.Default.Home),
+    CASE_MANAGEMENT("case_management", R.string.nav_case_management, Icons.Default.Info),
     CASE_OPS("case_ops", R.string.nav_case_ops, Icons.Default.Settings),
     ANALYSIS("analysis", R.string.nav_analysis, Icons.Default.Search),
     SETTINGS("settings", R.string.nav_settings, Icons.Default.Info)

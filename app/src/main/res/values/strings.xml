@@ -288,6 +288,10 @@
     <string name="settings_language_title">Language</string>
     <string name="settings_preferences_title">Preferences</string>
     <string name="settings_preferences_content">Configure your personal usage preferences here. Content can be updated remotely via local config override.</string>
+    <string name="settings_map_restore_toggle_title">Restore last map position on launch</string>
+    <string name="settings_map_restore_status_enabled">Enabled: restore previous center/zoom/bearing.</string>
+    <string name="settings_map_restore_status_disabled">Disabled: locate to current position on launch.</string>
+    <string name="settings_map_relocate_now">Relocate now</string>
     <string name="language_option_zh_cn">Simplified Chinese (zh-rCN)</string>
     <string name="language_option_zh_tw">Traditional Chinese (zh-rTW)</string>
     <string name="language_option_en">English (en)</string>

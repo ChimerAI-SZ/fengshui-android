@@ -288,6 +288,10 @@
     <string name="settings_language_title">语言设置</string>
     <string name="settings_preferences_title">个人偏好</string>
     <string name="settings_preferences_content">可在此管理个人偏好设置；说明文案支持通过本地配置动态覆盖更新。</string>
+    <string name="settings_map_restore_toggle_title">启动时恢复上次地图位置</string>
+    <string name="settings_map_restore_status_enabled">已开启：恢复上次中心点、缩放级别和方向。</string>
+    <string name="settings_map_restore_status_disabled">已关闭：启动时自动定位到当前位置。</string>
+    <string name="settings_map_relocate_now">立即重新定位</string>
     <string name="language_option_zh_cn">简体中文（zh-rCN）</string>
     <string name="language_option_zh_tw">繁体中文（zh-rTW）</string>
     <string name="language_option_en">English（en）</string>
