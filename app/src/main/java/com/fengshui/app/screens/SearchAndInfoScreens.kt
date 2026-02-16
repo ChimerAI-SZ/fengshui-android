@@ -544,7 +544,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     restoreLastMapPositionEnabled: Boolean? = null,
     onRestoreLastMapPositionEnabledChange: ((Boolean) -> Unit)? = null,
-    onRelocateNow: (() -> Unit)? = null
+    onRelocateNow: (() -> Unit)? = null,
+    onBeforeLanguageSwitch: (() -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val appName = stringResource(id = R.string.app_name)
@@ -630,6 +631,7 @@ fun SettingsScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     if (!selected) {
+                                        onBeforeLanguageSwitch?.invoke()
                                         AppLanguageManager.updateLanguage(context, option.tag)
                                     }
                                 }
@@ -640,6 +642,7 @@ fun SettingsScreen(
                                 selected = selected,
                                 onClick = {
                                     if (!selected) {
+                                        onBeforeLanguageSwitch?.invoke()
                                         AppLanguageManager.updateLanguage(context, option.tag)
                                     }
                                 },

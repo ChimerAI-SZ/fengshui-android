@@ -1,6 +1,7 @@
 package com.fengshui.app.map
 
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -192,6 +194,27 @@ fun MapScreen(
     var realGpsLng by remember { mutableStateOf<Double?>(null) }
     var hasRealGps by remember { mutableStateOf(false) }  // 是否已获取真实GPS
     var azimuth by remember { mutableStateOf(0f) }
+    val startupLastKnownLocation = remember {
+        val permissionGranted = PermissionHelper.hasLocationPermission(context)
+        if (!permissionGranted) {
+            null
+        } else {
+            runCatching {
+                val locationManager = context.getSystemService(LocationManager::class.java)
+                val candidates = listOfNotNull(
+                    locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER),
+                    locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER),
+                    locationManager?.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
+                )
+                candidates.maxByOrNull { it.time }?.let {
+                    UniversalLatLng(it.latitude, it.longitude)
+                }
+            }.getOrNull()
+        }
+    }
+    val sessionSavedCameraSnapshot = remember {
+        MapSessionStore.loadCameraPosition(context)
+    }
 
     // repository
     val repo = remember { PointRepository(context) }
@@ -307,14 +330,20 @@ fun MapScreen(
     var topSearchResults by remember { mutableStateOf(listOf<PoiResult>()) }
     var topSearchResultsVisible by remember { mutableStateOf(false) }
     var lifeCircleTopPanelVisible by remember { mutableStateOf(true) }
+    var lifeCircleOverlayHeightPx by remember { mutableStateOf(0) }
     var showSectorUnsavedOnly by remember { mutableStateOf(false) }
     var showFirstUseGuide by remember { mutableStateOf(false) }
     var deletedPointUndoCandidate by remember { mutableStateOf<FengShuiPoint?>(null) }
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
-    var lastKnownCameraPosition by remember { mutableStateOf<CameraPosition?>(null) }
+    var lastKnownCameraPosition by remember {
+        mutableStateOf(restoreCameraPosition ?: sessionSavedCameraSnapshot)
+    }
     var pendingAutoLocateToGps by remember { mutableStateOf(true) }
     var googleSatelliteRestrictionNotified by remember { mutableStateOf(false) }
     var gpsInitializationStartMs by remember { mutableStateOf<Long?>(null) }
+    var suppressPersistUntilMs by remember { mutableStateOf(0L) }
+    var mapCameraTick by remember { mutableStateOf(0L) }
+    var shouldAutoLocateOnFirstFix by remember { mutableStateOf(true) }
     val hasLocationPermission = PermissionHelper.hasLocationPermission(context)
     val gpsInitializationBlocking = pendingAutoLocateToGps && !hasRealGps && hasLocationPermission
     val gpsInitializationTimeoutMs = 12_000L
@@ -457,6 +486,7 @@ fun MapScreen(
 
     fun persistCameraSnapshot(position: CameraPosition?) {
         val snapshot = position ?: return
+        if (SystemClock.elapsedRealtime() < suppressPersistUntilMs) return
         if (restoreCameraPosition != null) return
         if (pendingAutoLocateToGps && !hasRealGps) return
         val looksUninitialized =
@@ -473,12 +503,48 @@ fun MapScreen(
         }
         lastProviderType = mapProviderType
         lineByPolylineId.clear()
-        pendingAutoLocateToGps = restoreCameraPosition == null
+        val hasRestoreSnapshot = restoreCameraPosition != null
+        pendingAutoLocateToGps = !hasRestoreSnapshot
+        shouldAutoLocateOnFirstFix = !hasRestoreSnapshot
+    }
+
+    LaunchedEffect(startupLastKnownLocation?.latitude, startupLastKnownLocation?.longitude) {
+        val cached = startupLastKnownLocation ?: return@LaunchedEffect
+        if (!hasRealGps && realGpsLat == null && realGpsLng == null) {
+            realGpsLat = cached.latitude
+            realGpsLng = cached.longitude
+            hasRealGps = true
+        }
     }
 
     LaunchedEffect(mapReady.value, mapProviderType, currentLanguageTag) {
         if (mapReady.value) {
+            val cameraSnapshotBeforeLanguageChange = mapProvider.getCameraPosition()
+                ?: lastKnownCameraPosition
+                ?: (if (realGpsLat != null && realGpsLng != null) {
+                    CameraPosition(
+                        target = UniversalLatLng(realGpsLat!!, realGpsLng!!),
+                        zoom = (mapProvider.getCameraPosition()?.zoom ?: lastKnownCameraPosition?.zoom ?: 15f),
+                        bearing = (mapProvider.getCameraPosition()?.bearing ?: lastKnownCameraPosition?.bearing ?: 0f)
+                    )
+                } else {
+                    null
+                })
+                ?: MapSessionStore.loadCameraPosition(context)
+            suppressPersistUntilMs = SystemClock.elapsedRealtime() + 1200L
             mapProvider.setLanguageTag(currentLanguageTag)
+            cameraSnapshotBeforeLanguageChange?.let { snapshot ->
+                scope.launch {
+                    delay(220)
+                    mapProvider.animateCamera(snapshot)
+                    lastKnownCameraPosition = snapshot
+                    if (hasRealGps) {
+                        pendingAutoLocateToGps = false
+                        shouldAutoLocateOnFirstFix = false
+                    }
+                    persistCameraSnapshot(snapshot)
+                }
+            }
         }
     }
 
@@ -509,11 +575,18 @@ fun MapScreen(
 
     LaunchedEffect(ui.lifeCircleMode) {
         if (ui.lifeCircleMode) {
+            closeQuickMenu()
             topSearchLoading = false
             topSearchResultsVisible = false
             lifeCircleTopPanelVisible = true
         } else {
             lifeCircleTopPanelVisible = true
+        }
+    }
+
+    LaunchedEffect(ui.lifeCircleMode, lifeCircleTopPanelVisible) {
+        if (!ui.lifeCircleMode || !lifeCircleTopPanelVisible) {
+            lifeCircleOverlayHeightPx = 0
         }
     }
 
@@ -528,7 +601,6 @@ fun MapScreen(
             return@LaunchedEffect
         }
         if (!hasLocationPermission) {
-            pendingAutoLocateToGps = false
             gpsInitializationStartMs = null
             showStatus(msgGpsPermissionMissingContinue)
             return@LaunchedEffect
@@ -587,6 +659,7 @@ fun MapScreen(
             mapProvider.animateCamera(followPosition)
             lastKnownCameraPosition = followPosition
             pendingAutoLocateToGps = false
+            shouldAutoLocateOnFirstFix = false
         }
     }
 
@@ -678,11 +751,25 @@ fun MapScreen(
         )
     }
 
+    fun buildStartupCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
+        return restoreCameraPosition
+            ?: lastKnownCameraPosition
+            ?: sessionSavedCameraSnapshot
+            ?: buildCurrentGpsCameraSnapshot(defaultZoom)
+            ?: startupLastKnownLocation?.let { cached ->
+                CameraPosition(
+                    target = cached,
+                    zoom = defaultZoom,
+                    bearing = 0f
+                )
+            }
+    }
+
     fun buildPreferredSwitchCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
         return mapProvider.getCameraPosition()
             ?: lastKnownCameraPosition
-            ?: MapSessionStore.loadCameraPosition(context)
             ?: buildCurrentGpsCameraSnapshot(defaultZoom)
+            ?: MapSessionStore.loadCameraPosition(context)
     }
 
     fun fallbackGoogleSatelliteToAmap(cameraSnapshot: CameraPosition?) {
@@ -705,6 +792,7 @@ fun MapScreen(
             lockedLng = null
             deviceDirectionMode = false
             pendingAutoLocateToGps = false
+            shouldAutoLocateOnFirstFix = false
             if (showBanner) {
                 showStatus(msgLocatedCurrentPosition)
             }
@@ -739,6 +827,7 @@ fun MapScreen(
                 mapProvider.animateCamera(snapshot)
                 lastKnownCameraPosition = snapshot
                 pendingAutoLocateToGps = false
+                shouldAutoLocateOnFirstFix = false
             }
         }
     }
@@ -839,6 +928,7 @@ fun MapScreen(
             mapProvider.animateCamera(northPosition)
             lastKnownCameraPosition = northPosition
             pendingAutoLocateToGps = false
+            shouldAutoLocateOnFirstFix = false
             deviceDirectionMode = false
             compassLocked = false
             lockedLat = null
@@ -864,6 +954,7 @@ fun MapScreen(
     LaunchedEffect(forceRelocateSignal) {
         if (forceRelocateSignal > 0) {
             pendingAutoLocateToGps = true
+            shouldAutoLocateOnFirstFix = true
             suppressAutoLocateOnce = false
             if (realGpsLat != null && realGpsLng != null) {
                 locateToCurrentAndNorth()
@@ -960,6 +1051,7 @@ fun MapScreen(
             showTrialDialog = true
             return
         }
+        closeQuickMenu()
         ui.lifeCircleData?.homePoint?.let { home ->
             lockedLat = home.latitude
             lockedLng = home.longitude
@@ -1058,6 +1150,7 @@ fun MapScreen(
 
     fun clearSectorArtifacts() {
         ui.sectorOverlayVisible = false
+        ui.sectorUseMapCenterOrigin = false
         ui.sectorResults.clear()
         ui.showSectorResultDialog = false
         pendingSectorLocatePoi = null
@@ -1078,25 +1171,91 @@ fun MapScreen(
         }
     }
 
-    fun focusOnSectorResults(results: List<PoiResult>) {
-        if (results.isEmpty()) return
-        if (results.size == 1) {
-            requestCameraMove(UniversalLatLng(results[0].lat, results[0].lng), 16f, CameraMoveSource.SEARCH_RESULT)
-            return
+    fun focusOnSectorResults(
+        results: List<PoiResult>,
+        origin: UniversalLatLng?,
+        config: SectorConfig?
+    ) {
+        val boundsPoints = mutableListOf<UniversalLatLng>()
+        results.forEach { poi ->
+            boundsPoints.add(UniversalLatLng(poi.lat, poi.lng))
         }
-        val minLat = results.minOf { it.lat }
-        val maxLat = results.maxOf { it.lat }
-        val minLng = results.minOf { it.lng }
-        val maxLng = results.maxOf { it.lng }
+        if (origin != null) {
+            boundsPoints.add(origin)
+            if (config != null) {
+                boundsPoints.add(
+                    RhumbLineUtils.calculateRhumbDestination(
+                        start = origin,
+                        bearing = config.startAngle,
+                        distanceMeters = config.maxDistanceMeters
+                    )
+                )
+                boundsPoints.add(
+                    RhumbLineUtils.calculateRhumbDestination(
+                        start = origin,
+                        bearing = config.endAngle,
+                        distanceMeters = config.maxDistanceMeters
+                    )
+                )
+                val span = sectorSpanDegrees(config.startAngle, config.endAngle)
+                val stepCount = 24
+                for (index in 1 until stepCount) {
+                    val angle = (config.startAngle + span * (index.toFloat() / stepCount.toFloat())) % 360f
+                    boundsPoints.add(
+                        RhumbLineUtils.calculateRhumbDestination(
+                            start = origin,
+                            bearing = angle,
+                            distanceMeters = config.maxDistanceMeters
+                        )
+                    )
+                }
+            }
+        }
+        if (boundsPoints.isEmpty()) return
+        val minLat = boundsPoints.minOf { it.latitude }
+        val maxLat = boundsPoints.maxOf { it.latitude }
+        val minLng = boundsPoints.minOf { it.longitude }
+        val maxLng = boundsPoints.maxOf { it.longitude }
         val latPad = ((maxLat - minLat) * 0.15).coerceAtLeast(0.002)
         val lngPad = ((maxLng - minLng) * 0.15).coerceAtLeast(0.002)
-        mapProvider.animateCameraToBounds(
-            com.fengshui.app.map.abstraction.UniversalLatLngBounds(
-                southwest = UniversalLatLng(minLat - latPad, minLng - lngPad),
-                northeast = UniversalLatLng(maxLat + latPad, maxLng + lngPad)
-            ),
-            padding = 120
+        val fitBounds = com.fengshui.app.map.abstraction.UniversalLatLngBounds(
+            southwest = UniversalLatLng(minLat - latPad, minLng - lngPad),
+            northeast = UniversalLatLng(maxLat + latPad, maxLng + lngPad)
         )
+        val minScreenEdge = screenWidthPx.coerceAtMost(screenHeightPx)
+        val basePadding = with(density) { 208.dp.toPx() }.toInt()
+        val fitPadding = basePadding.coerceAtMost((minScreenEdge * 0.42f).toInt()).coerceAtLeast(140)
+
+        mapProvider.animateCameraToBounds(
+            fitBounds,
+            padding = fitPadding
+        )
+
+        // Re-fit after first animation and bias center upward to avoid bottom overlays covering POI markers.
+        scope.launch {
+            delay(320)
+            mapProvider.animateCameraToBounds(
+                fitBounds,
+                padding = (fitPadding * 1.12f).toInt()
+            )
+            delay(180)
+            val current = mapProvider.getCameraPosition() ?: lastKnownCameraPosition
+            if (current != null) {
+                val topInsetPx = with(density) { 96.dp.toPx() }
+                val bottomInsetPx = with(density) { 182.dp.toPx() }
+                val shiftYPx = ((bottomInsetPx - topInsetPx) / 2f)
+                    .coerceIn(-screenHeightPx * 0.2f, screenHeightPx * 0.2f)
+                if (kotlin.math.abs(shiftYPx) > 2f) {
+                    val target = mapProvider.screenLocationToLatLng(
+                        screenWidthPx / 2f,
+                        (screenHeightPx / 2f) + shiftYPx
+                    )
+                    val shifted = current.copy(target = target)
+                    mapProvider.animateCamera(shifted)
+                    lastKnownCameraPosition = shifted
+                }
+            }
+        }
     }
 
     fun isPoiAlreadySaved(poi: PoiResult): Boolean {
@@ -1152,6 +1311,30 @@ fun MapScreen(
         renderPointMarkers(clearExisting = true)
     }
 
+    fun currentCompassAnchor(): UniversalLatLng? {
+        if (compassLocked && lockedLat != null && lockedLng != null) {
+            return UniversalLatLng(lockedLat!!, lockedLng!!)
+        }
+        if (realGpsLat != null && realGpsLng != null) {
+            return UniversalLatLng(realGpsLat!!, realGpsLng!!)
+        }
+        return null
+    }
+
+    fun resolveCrosshairCenterAnchor(): UniversalLatLng? {
+        return runCatching {
+            mapProvider.screenLocationToLatLng(screenWidthPx / 2f, screenHeightPx / 2f)
+        }.getOrNull()
+            ?: ui.crosshairLocation
+            ?: mapProvider.getCameraPosition()?.target
+            ?: lastKnownCameraPosition?.target
+    }
+
+    fun continuousAddAnchor(): UniversalLatLng? {
+        return resolveCrosshairCenterAnchor()
+            ?: currentCompassAnchor()
+    }
+
     fun onPointAdded(point: FengShuiPoint, type: PointType) {
         lastAddedPoint = point
         lastAddedPointType = type
@@ -1167,7 +1350,7 @@ fun MapScreen(
             viewModel.openCrosshair(
                 crosshairManualTitle,
                 msgContinueAddHint,
-                mapProvider.getCameraPosition()?.target
+                continuousAddAnchor()
             )
         } else {
             showPostSaveQuickActions = true
@@ -1418,13 +1601,14 @@ fun MapScreen(
             realGpsLat = lat
             realGpsLng = lng
             hasRealGps = true  // 标记已获取真实GPS
-            if (mapReady.value && pendingAutoLocateToGps && !suppressAutoLocateOnce) {
+            if (mapReady.value && shouldAutoLocateOnFirstFix && !suppressAutoLocateOnce) {
                 requestCameraMove(
                     UniversalLatLng(lat, lng),
                     15f,
                     CameraMoveSource.GPS_AUTO_LOCATE
                 )
                 pendingAutoLocateToGps = false
+                shouldAutoLocateOnFirstFix = false
             }
         }
     }
@@ -1453,6 +1637,7 @@ fun MapScreen(
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
+            mapCameraTick += 1
         }
         mapProvider.onCameraChangeFinish { cam ->
             azimuth = if (mapProviderType == MapProviderType.GOOGLE) -cam.bearing else cam.bearing
@@ -1461,6 +1646,7 @@ fun MapScreen(
             if (compassLocked && lockedLat != null && lockedLng != null) {
                 updateCompassScreenPosition()
             }
+            mapCameraTick += 1
             if (ui.crosshairMode) {
                 viewModel.updateCrosshairLocation(
                     mapProvider.screenLocationToLatLng(
@@ -1469,9 +1655,6 @@ fun MapScreen(
                     )
                 )
             }
-            if (ui.sectorOverlayVisible && ui.sectorUseMapCenterOrigin) {
-                ui.sectorRenderTick += 1
-            }
         }
         
         onDispose {
@@ -1479,10 +1662,10 @@ fun MapScreen(
         }
     }
 
-    LaunchedEffect(mapReady.value, realGpsLat, realGpsLng, pendingAutoLocateToGps, suppressAutoLocateOnce) {
+    LaunchedEffect(mapReady.value, realGpsLat, realGpsLng, shouldAutoLocateOnFirstFix, suppressAutoLocateOnce) {
         if (
             mapReady.value &&
-            pendingAutoLocateToGps &&
+            shouldAutoLocateOnFirstFix &&
             hasRealGps &&
             realGpsLat != null &&
             realGpsLng != null &&
@@ -1494,26 +1677,26 @@ fun MapScreen(
                 CameraMoveSource.GPS_AUTO_LOCATE
             )
             pendingAutoLocateToGps = false
+            shouldAutoLocateOnFirstFix = false
         }
     }
 
-    LaunchedEffect(mapProviderType, restoreCameraPosition) {
+    LaunchedEffect(restoreCameraPosition) {
         if (restoreCameraPosition != null) {
-            suppressAutoLocateOnce = true
+            pendingAutoLocateToGps = false
+            shouldAutoLocateOnFirstFix = false
         }
     }
 
     LaunchedEffect(mapProviderType, mapReady.value, restoreCameraPosition) {
         val snapshot = restoreCameraPosition
         if (mapReady.value && snapshot != null) {
-            suppressAutoLocateOnce = true
             mapProvider.animateCamera(snapshot)
             lastKnownCameraPosition = snapshot
-            persistCameraSnapshot(snapshot)
             pendingAutoLocateToGps = false
+            shouldAutoLocateOnFirstFix = false
+            persistCameraSnapshot(snapshot)
             onRestoreCameraConsumed?.invoke()
-            delay(300)
-            suppressAutoLocateOnce = false
         }
     }
 
@@ -1560,15 +1743,15 @@ fun MapScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when (mapProvider) {
                 is com.fengshui.app.map.abstraction.googlemaps.GoogleMapProvider -> {
+                    val startupSnapshot = buildStartupCameraSnapshot(defaultZoom = 15f)
                     GoogleMapView(
                         modifier = Modifier
                             .fillMaxSize()
                             .zIndex(0f),
-                        initialZoom = 15f,
-                        initialCenter = com.google.android.gms.maps.model.LatLng(
-                            realGpsLat ?: lastKnownCameraPosition?.target?.latitude ?: 0.0,
-                            realGpsLng ?: lastKnownCameraPosition?.target?.longitude ?: 0.0
-                        ),
+                        initialZoom = startupSnapshot?.zoom ?: 15f,
+                        initialCenter = startupSnapshot?.target?.let { center ->
+                            com.google.android.gms.maps.model.LatLng(center.latitude, center.longitude)
+                        },
                         onMapReady = { gMap ->
                             mapReady.value = true
                             mapProvider.setGoogleMap(gMap)
@@ -1585,6 +1768,10 @@ fun MapScreen(
                                     selectedPoiDetail = poi
                                     showPoiDetailDialog = true
                                 }
+                            }
+                            if (startupSnapshot != null) {
+                                mapProvider.animateCamera(startupSnapshot)
+                                lastKnownCameraPosition = startupSnapshot
                             }
                             refreshLinesForDisplay()
                             refreshNormalLines()
@@ -1614,6 +1801,11 @@ fun MapScreen(
                                     selectedPoiDetail = poi
                                     showPoiDetailDialog = true
                                 }
+                            }
+                            val startupSnapshot = buildStartupCameraSnapshot(defaultZoom = 15f)
+                            if (startupSnapshot != null) {
+                                mapProvider.animateCamera(startupSnapshot)
+                                lastKnownCameraPosition = startupSnapshot
                             }
                             refreshLinesForDisplay()
                             refreshNormalLines()
@@ -1750,7 +1942,15 @@ fun MapScreen(
                 }
             }
 
-            val rightControlsTopPadding = if (ui.lifeCircleMode && lifeCircleTopPanelVisible) 116.dp else 88.dp
+            val rightControlsTopPadding = if (ui.lifeCircleMode && lifeCircleTopPanelVisible) {
+                if (lifeCircleOverlayHeightPx > 0) {
+                    with(density) { lifeCircleOverlayHeightPx.toDp() } + 12.dp
+                } else {
+                    116.dp
+                }
+            } else {
+                88.dp
+            }
             Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -2131,11 +2331,7 @@ fun MapScreen(
                         // no-op: just subscribe state for recomposition
                     }
                     val config = ui.lastSectorConfig
-                    val origin = if (ui.sectorUseMapCenterOrigin) {
-                        mapProvider.getCameraPosition()?.target
-                    } else {
-                        ui.sectorOrigin
-                    }
+                    val origin = ui.sectorOrigin
                     if (config != null && origin != null) {
                         val startPoint = RhumbLineUtils.calculateRhumbDestination(
                             start = origin,
@@ -2221,7 +2417,11 @@ fun MapScreen(
                         showPostSaveQuickActions = false
                     },
                     onSelectOrigin = {
-                        val target = ui.crosshairLocation ?: mapProvider.getCameraPosition()?.target
+                        val target = if (continuousAddMode) {
+                            continuousAddAnchor()
+                        } else {
+                            resolveCrosshairCenterAnchor() ?: currentCompassAnchor()
+                        }
                         if (target == null) {
                             trialMessage = msgNoLocation
                             showTrialDialog = true
@@ -2237,7 +2437,11 @@ fun MapScreen(
                         }
                     },
                     onSelectDestination = {
-                        val target = ui.crosshairLocation ?: mapProvider.getCameraPosition()?.target
+                        val target = if (continuousAddMode) {
+                            continuousAddAnchor()
+                        } else {
+                            resolveCrosshairCenterAnchor() ?: currentCompassAnchor()
+                        }
                         if (target == null) {
                             trialMessage = msgNoLocation
                             showTrialDialog = true
@@ -2538,7 +2742,7 @@ fun MapScreen(
                                     viewModel.openCrosshair(
                                         crosshairManualTitle,
                                         msgContinueAddHint,
-                                        mapProvider.getCameraPosition()?.target
+                                        continuousAddAnchor()
                                     )
                                 },
                                 modifier = Modifier.weight(1f)
@@ -2682,24 +2886,42 @@ fun MapScreen(
             }
 
             if (ui.lifeCircleMode) {
+                val data = ui.lifeCircleData
+
                 if (lifeCircleTopPanelVisible) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .zIndex(4f)
+                            .padding(end = 78.dp)
+                            .onGloballyPositioned { coordinates ->
+                                lifeCircleOverlayHeightPx = coordinates.size.height
+                            }
                     ) {
-                        LifeCircleBanner(
-                            onShowInfo = { ui.showLifeCircleInfoDialog = true },
-                            topPanelVisible = lifeCircleTopPanelVisible,
-                            onToggleTopPanel = {
-                                lifeCircleTopPanelVisible = false
-                            },
-                            onExit = {
-                                lifeCircleTopPanelVisible = true
-                                exitLifeCircleMode()
-                            },
-                            modifier = Modifier.padding(end = 78.dp)
-                        )
+                        Column {
+                            LifeCircleBanner(
+                                onShowInfo = { ui.showLifeCircleInfoDialog = true },
+                                topPanelVisible = lifeCircleTopPanelVisible,
+                                onToggleTopPanel = {
+                                    lifeCircleTopPanelVisible = false
+                                },
+                                onExit = {
+                                    lifeCircleTopPanelVisible = true
+                                    exitLifeCircleMode()
+                                }
+                            )
+
+                            if (data != null) {
+                                val homeLabels = buildLifeCircleLabels(data.homePoint.id)
+                                val workLabels = buildLifeCircleLabels(data.workPoint.id)
+                                val entertainmentLabels = buildLifeCircleLabels(data.entertainmentPoint.id)
+                                LifeCircleLabelPanel(
+                                    homeLabels = homeLabels,
+                                    workLabels = workLabels,
+                                    entertainmentLabels = entertainmentLabels
+                                )
+                            }
+                        }
                     }
                 } else {
                     Box(
@@ -2719,24 +2941,28 @@ fun MapScreen(
                     }
                 }
 
-                val data = ui.lifeCircleData
                 if (data != null) {
+                    val lifePoints = remember(data, mapCameraTick) {
+                        listOf(data.homePoint, data.workPoint, data.entertainmentPoint)
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .zIndex(1.3f)
                     ) {
-                        val lifePoints = listOf(data.homePoint, data.workPoint, data.entertainmentPoint)
+                        val lifeCompassSize = 156.dp
+                        val lifeCompassRadiusPx = with(density) { lifeCompassSize.toPx() / 2f }
                         lifePoints.forEach { point ->
-                            val screenPos = mapProvider.latLngToScreenLocation(
-                                UniversalLatLng(point.latitude, point.longitude)
-                            )
-                            val radiusPx = with(density) { 64.dp.toPx() }
+                            val screenPos = runCatching {
+                                mapProvider.latLngToScreenLocation(
+                                    UniversalLatLng(point.latitude, point.longitude)
+                                )
+                            }.getOrNull() ?: return@forEach
                             Box(
                                 modifier = Modifier.offset {
                                     IntOffset(
-                                        (screenPos.x - radiusPx).toInt(),
-                                        (screenPos.y - radiusPx).toInt()
+                                        (screenPos.x - lifeCompassRadiusPx).toInt(),
+                                        (screenPos.y - lifeCompassRadiusPx).toInt()
                                     )
                                 }
                             ) {
@@ -2744,29 +2970,11 @@ fun MapScreen(
                                     azimuthDegrees = azimuth,
                                     latitude = point.latitude,
                                     longitude = point.longitude,
-                                    sizeDp = 156.dp,
+                                    sizeDp = lifeCompassSize,
                                     showInfo = false,
                                     labelScale = 0.78f
                                 )
                             }
-                        }
-                    }
-
-                    if (lifeCircleTopPanelVisible) {
-                        val homeLabels = buildLifeCircleLabels(data.homePoint.id)
-                        val workLabels = buildLifeCircleLabels(data.workPoint.id)
-                        val entertainmentLabels = buildLifeCircleLabels(data.entertainmentPoint.id)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 56.dp, end = 78.dp)
-                                .zIndex(4f)
-                        ) {
-                            LifeCircleLabelPanel(
-                                homeLabels = homeLabels,
-                                workLabels = workLabels,
-                                entertainmentLabels = entertainmentLabels
-                            )
                         }
                     }
                 }
@@ -2795,7 +3003,7 @@ fun MapScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .zIndex(35f)
-                        .background(Color(0x9A000000))
+                        .background(Color(0xFF121212))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -3159,7 +3367,7 @@ fun MapScreen(
                         }
 
                         ui.sectorOrigin = originLatLng
-                        ui.sectorUseMapCenterOrigin = usingMapCenter
+                        ui.sectorUseMapCenterOrigin = false
                         ui.lastSectorConfig = config
                         ui.sectorConfigLabel = config.label
                         ui.sectorOverlayVisible = true
@@ -3185,7 +3393,7 @@ fun MapScreen(
                                 config = config,
                                 onResult = { results ->
                                     showPoiMarkers(results)
-                                    focusOnSectorResults(results)
+                                    focusOnSectorResults(results, ui.sectorOrigin, ui.lastSectorConfig)
                                     if (results.isNotEmpty()) {
                                         showStatus(msgSectorReadyOpenDetails)
                                     }

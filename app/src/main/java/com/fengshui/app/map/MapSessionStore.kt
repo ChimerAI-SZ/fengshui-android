@@ -10,6 +10,7 @@ import com.fengshui.app.utils.Prefs
 object MapSessionStore {
     private const val KEY_RESTORE_LAST_POSITION_ENABLED = "map_restore_last_position_enabled"
     private const val KEY_LAST_CAMERA_STATE = "map_last_camera_state"
+    private const val KEY_ONE_SHOT_CAMERA_STATE = "map_one_shot_camera_state"
     private const val KEY_LAST_PROVIDER_TYPE = "map_last_provider_type"
     private const val KEY_LAST_MAP_TYPE = "map_last_map_type"
 
@@ -21,33 +22,28 @@ object MapSessionStore {
     }
 
     fun saveCameraPosition(context: Context, position: CameraPosition) {
-        val payload = listOf(
-            position.target.latitude.toString(),
-            position.target.longitude.toString(),
-            position.zoom.toString(),
-            position.bearing.toString()
-        ).joinToString(",")
+        val payload = serializeCameraPosition(position)
         Prefs.saveString(context, KEY_LAST_CAMERA_STATE, payload)
     }
 
     fun loadCameraPosition(context: Context): CameraPosition? {
         val raw = Prefs.getString(context, KEY_LAST_CAMERA_STATE)?.trim().orEmpty()
-        if (raw.isBlank()) return null
-        val parts = raw.split(",")
-        if (parts.size != 4) return null
-        val lat = parts[0].toDoubleOrNull() ?: return null
-        val lng = parts[1].toDoubleOrNull() ?: return null
-        val zoom = parts[2].toFloatOrNull() ?: return null
-        val bearing = parts[3].toFloatOrNull() ?: 0f
-        return CameraPosition(
-            target = UniversalLatLng(lat, lng),
-            zoom = zoom,
-            bearing = bearing
-        )
+        return parseCameraPosition(raw)
     }
 
     fun clearCameraPosition(context: Context) {
         Prefs.saveString(context, KEY_LAST_CAMERA_STATE, "")
+    }
+
+    fun saveOneShotCameraPosition(context: Context, position: CameraPosition) {
+        Prefs.saveString(context, KEY_ONE_SHOT_CAMERA_STATE, serializeCameraPosition(position))
+    }
+
+    fun consumeOneShotCameraPosition(context: Context): CameraPosition? {
+        val raw = Prefs.getString(context, KEY_ONE_SHOT_CAMERA_STATE)?.trim().orEmpty()
+        if (raw.isBlank()) return null
+        Prefs.saveString(context, KEY_ONE_SHOT_CAMERA_STATE, "")
+        return parseCameraPosition(raw)
     }
 
     fun saveMapProviderType(context: Context, providerType: MapProviderType) {
@@ -68,5 +64,29 @@ object MapSessionStore {
         val raw = Prefs.getString(context, KEY_LAST_MAP_TYPE)?.trim().orEmpty()
         if (raw.isBlank()) return null
         return runCatching { MapType.valueOf(raw) }.getOrNull()
+    }
+
+    private fun serializeCameraPosition(position: CameraPosition): String {
+        return listOf(
+            position.target.latitude.toString(),
+            position.target.longitude.toString(),
+            position.zoom.toString(),
+            position.bearing.toString()
+        ).joinToString(",")
+    }
+
+    private fun parseCameraPosition(raw: String): CameraPosition? {
+        if (raw.isBlank()) return null
+        val parts = raw.split(",")
+        if (parts.size != 4) return null
+        val lat = parts[0].toDoubleOrNull() ?: return null
+        val lng = parts[1].toDoubleOrNull() ?: return null
+        val zoom = parts[2].toFloatOrNull() ?: return null
+        val bearing = parts[3].toFloatOrNull() ?: 0f
+        return CameraPosition(
+            target = UniversalLatLng(lat, lng),
+            zoom = zoom,
+            bearing = bearing
+        )
     }
 }

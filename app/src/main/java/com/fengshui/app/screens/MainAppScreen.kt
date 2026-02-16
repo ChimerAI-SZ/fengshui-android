@@ -58,9 +58,12 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
         MapSessionStore.isRestoreLastPositionEnabled(context)
     }
     var restoreLastPositionEnabled by rememberSaveable { mutableStateOf(initialRestoreEnabled) }
+    val initialOneShotCamera = remember {
+        MapSessionStore.consumeOneShotCameraPosition(context)
+    }
     var pendingCameraToRestore by remember {
         mutableStateOf(
-            if (initialRestoreEnabled) {
+            initialOneShotCamera ?: if (initialRestoreEnabled) {
                 MapSessionStore.loadCameraPosition(context)
             } else {
                 null
@@ -79,6 +82,12 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     val mapProvider = when (mapProviderType) {
         MapProviderType.AMAP -> amapProvider
         MapProviderType.GOOGLE -> googleMapProvider
+    }
+
+    fun resolveCurrentCameraSnapshot(): CameraPosition? {
+        return mapProvider.getCameraPosition()
+            ?: pendingCameraToRestore
+            ?: MapSessionStore.loadCameraPosition(context)
     }
 
     fun isProviderAvailable(providerType: MapProviderType): Boolean {
@@ -200,6 +209,17 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                     NavigationBarItem(
                         selected = currentTab == item,
                         onClick = {
+                            val currentIsMapHost =
+                                currentTab == NavigationItem.MAP ||
+                                    currentTab == NavigationItem.CASE_OPS ||
+                                    currentTab == NavigationItem.ANALYSIS
+                            val targetIsMapHost =
+                                item == NavigationItem.MAP ||
+                                    item == NavigationItem.CASE_OPS ||
+                                    item == NavigationItem.ANALYSIS
+                            if (currentIsMapHost && !targetIsMapHost) {
+                                pendingCameraToRestore = resolveCurrentCameraSnapshot()
+                            }
                             currentTab = item
                             when (item) {
                                 NavigationItem.MAP -> {
@@ -262,6 +282,11 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         quickAddCaseId = quickAddCaseId,
                         onQuickAddConsumed = { quickAddCaseId = null },
                         onOpenSettings = {
+                            val snapshot = resolveCurrentCameraSnapshot()
+                            if (snapshot != null) {
+                                MapSessionStore.saveOneShotCameraPosition(context, snapshot)
+                                pendingCameraToRestore = snapshot
+                            }
                             openCaseOpsSignal = 0
                             openAnalysisSignal = 0
                             closeQuickMenuSignal += 1
@@ -289,6 +314,13 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                         },
                         onRelocateNow = {
                             relocateNowFromSettings()
+                        },
+                        onBeforeLanguageSwitch = {
+                            val snapshot = resolveCurrentCameraSnapshot()
+                            if (snapshot != null) {
+                                MapSessionStore.saveOneShotCameraPosition(context, snapshot)
+                                pendingCameraToRestore = snapshot
+                            }
                         }
                     )
                 }

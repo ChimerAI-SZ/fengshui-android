@@ -19,7 +19,8 @@ class MainActivity : AppCompatActivity() {
     ) { permissions ->
         val granted = permissions.values.all { it }
         if (granted) {
-            // 权限已授予，无需额外操作，LocationHelper会自动开始工作
+            // 首次授权后重建，确保 Compose 与地图层读取到最新权限并立即触发自动定位。
+            recreate()
         } else {
             // 权限被拒绝，可以在这里显示提示
         }

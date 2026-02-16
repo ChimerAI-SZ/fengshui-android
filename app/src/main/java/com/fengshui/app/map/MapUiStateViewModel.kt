@@ -14,7 +14,6 @@ import com.fengshui.app.map.poi.NominatimPoiProvider
 import com.fengshui.app.map.poi.PoiTypeMapper
 import com.fengshui.app.map.sector.SectorUtils
 import com.fengshui.app.map.ui.SectorConfig
-import com.fengshui.app.utils.RhumbLineUtils
 import kotlinx.coroutines.launch
 import android.os.SystemClock
 
@@ -236,48 +235,6 @@ class MapUiStateViewModel : ViewModel() {
                     endAngle = config.endAngle,
                     maxDistanceMeters = searchRadius.toFloat()
                 )
-                // Robust fallback: tolerate coordinate-system mismatch and narrow-sector misses.
-                if (filtered.isEmpty() && raw.isNotEmpty()) {
-                    filtered = SectorUtils.filterPOIsInSector(
-                        origin = origin,
-                        pois = raw,
-                        startAngle = config.startAngle,
-                        endAngle = config.endAngle,
-                        maxDistanceMeters = searchRadius.toFloat(),
-                        bearingOffsetDegrees = 180f
-                    )
-                }
-                if (filtered.isEmpty() && raw.isNotEmpty()) {
-                    filtered = SectorUtils.filterPOIsInSector(
-                        origin = origin,
-                        pois = raw,
-                        startAngle = config.startAngle,
-                        endAngle = config.endAngle,
-                        maxDistanceMeters = searchRadius.toFloat(),
-                        angleToleranceDegrees = 12f
-                    )
-                }
-                if (filtered.isEmpty() && raw.isNotEmpty()) {
-                    filtered = SectorUtils.filterPOIsInSector(
-                        origin = origin,
-                        pois = raw,
-                        startAngle = config.startAngle,
-                        endAngle = config.endAngle,
-                        maxDistanceMeters = searchRadius.toFloat(),
-                        bearingOffsetDegrees = 180f,
-                        angleToleranceDegrees = 12f
-                    )
-                }
-                if (filtered.isEmpty() && raw.isNotEmpty()) {
-                    // Last-resort fallback: show nearest usable results so user can still operate.
-                    filtered = raw.sortedBy {
-                        RhumbLineUtils.calculateRhumbDistance(
-                            origin,
-                            UniversalLatLng(it.lat, it.lng)
-                        )
-                    }.take(50)
-                    ui.sectorFallbackUsed = true
-                }
                 val maxPoiCount = 50
                 val trimmed = filtered.take(maxPoiCount)
                 ui.sectorDebugSectorFiltered = filtered.size

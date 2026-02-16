@@ -19,7 +19,7 @@ import com.google.android.gms.maps.model.LatLng
 fun GoogleMapView(
     modifier: Modifier = Modifier,
     initialZoom: Float = 15f,
-    initialCenter: LatLng = LatLng(0.0, 0.0),
+    initialCenter: LatLng? = null,
     onMapReady: (GoogleMap) -> Unit = {}
 ) {
     AndroidView(
@@ -29,7 +29,9 @@ fun GoogleMapView(
                 getMapAsync { gMap ->
                     gMap.uiSettings.isRotateGesturesEnabled = true
                     gMap.uiSettings.isTiltGesturesEnabled = true
-                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialCenter, initialZoom))
+                    initialCenter?.let { center ->
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(center, initialZoom))
+                    }
                     onMapReady(gMap)
                 }
                 onResume()
