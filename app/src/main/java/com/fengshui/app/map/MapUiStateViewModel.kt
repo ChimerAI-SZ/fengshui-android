@@ -286,7 +286,7 @@ class MapUiStateViewModel : ViewModel() {
                 ui.sectorResults.addAll(trimmed)
                 ui.sectorNoticeCount = if (filtered.size > maxPoiCount) maxPoiCount else null
                 ui.sectorLoading = false
-                ui.showSectorResultDialog = true
+                ui.showSectorResultDialog = false
                 onResult(trimmed)
             } catch (t: Throwable) {
                 ui.sectorLoading = false

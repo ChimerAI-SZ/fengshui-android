@@ -127,37 +127,6 @@ class PointRepository(private val context: Context) {
         isGPSOrigin: Boolean = false,
         isVisible: Boolean = true
     ): FengShuiPoint {
-        // Trial limit checks
-        if (!com.fengshui.app.TrialManager.isRegistered(context)) {
-            val existing = loadPoints()
-            when (type) {
-                PointType.ORIGIN -> {
-                    val origins = existing.filter { it.type == PointType.ORIGIN && !it.isGPSOrigin }
-                    if (origins.size >= com.fengshui.app.TrialManager.TRIAL_MAX_ORIGINS) {
-                        throw com.fengshui.app.TrialLimitException(
-                            context.getString(
-                                R.string.trial_limit_max_origins,
-                                com.fengshui.app.TrialManager.TRIAL_MAX_ORIGINS
-                            ),
-                            com.fengshui.app.TrialLimitException.LimitType.ORIGIN
-                        )
-                    }
-                }
-                PointType.DESTINATION -> {
-                    val dests = existing.filter { it.type == PointType.DESTINATION }
-                    if (dests.size >= com.fengshui.app.TrialManager.TRIAL_MAX_DESTINATIONS) {
-                        throw com.fengshui.app.TrialLimitException(
-                            context.getString(
-                                R.string.trial_limit_max_destinations,
-                                com.fengshui.app.TrialManager.TRIAL_MAX_DESTINATIONS
-                            ),
-                            com.fengshui.app.TrialLimitException.LimitType.DESTINATION
-                        )
-                    }
-                }
-            }
-        }
-
         val resolvedGroupName = groupName ?: groupId?.let { id ->
             loadProjects().find { it.id == id }?.name
         }

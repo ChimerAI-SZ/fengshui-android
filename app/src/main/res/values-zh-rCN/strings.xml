@@ -297,8 +297,8 @@
     <string name="settings_map_restore_status_disabled">已关闭：启动时自动定位到当前位置。</string>
     <string name="settings_map_relocate_now">立即重新定位</string>
     <string name="language_option_zh_cn">简体中文（zh-rCN）</string>
-    <string name="language_option_zh_tw">繁体中文（zh-rTW）</string>
-    <string name="language_option_en">English（en）</string>
+    <string name="language_option_zh_tw">繁體中文（zh-rTW）</string>
+    <string name="language_option_en">English (en)</string>
     <string name="info_unknown_time">-</string>
     <string name="info_section_version_dynamic">应用名：%1$s\n版本：%2$s (%3$d)\n发布时间：%4$s</string>
     <string name="map_switch_reason_missing_google_key">未配置 Google Maps API Key</string>
@@ -334,6 +334,10 @@
     <string name="sector_no_results_suggestion">建议：扩大距离 / 切换关键词（如住宅=小区/公寓）/ 切换地图源后重试</string>
     <string name="sector_show_all_results">显示全部结果</string>
     <string name="sector_show_unsaved_only">仅显示未保存</string>
+    <string name="sector_ready_open_details">扇形结果已展示在地图上，可点“详情”查看列表。</string>
+    <string name="action_sector_view_details">详情</string>
+    <string name="action_back_to_map">回到地图</string>
+    <string name="action_close_sector_search">关闭搜索</string>
     <string name="status_saved_to_current_case">已保存到当前案例</string>
     <string name="status_switched_origin_and_locked">已切换原点并锁定罗盘</string>
     <string name="status_added_origin">已添加原点：%1$s</string>
@@ -342,6 +346,7 @@
     <string name="status_deleted_simple">%1$s 已删除</string>
     <string name="status_undo_delete">已撤销删除</string>
     <string name="map_provider_unsupported">不支持的地图提供方</string>
+    <string name="marker_sector_origin">搜索原点</string>
     <string name="direction_north_cn">北</string>
     <string name="direction_north_en">N</string>
     <string name="poi_detail_latitude">纬度：%1$.6f</string>

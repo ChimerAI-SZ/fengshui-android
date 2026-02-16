@@ -296,8 +296,8 @@
     <string name="settings_map_restore_status_enabled">Enabled: restore previous center/zoom/bearing.</string>
     <string name="settings_map_restore_status_disabled">Disabled: locate to current position on launch.</string>
     <string name="settings_map_relocate_now">Relocate now</string>
-    <string name="language_option_zh_cn">Simplified Chinese (zh-rCN)</string>
-    <string name="language_option_zh_tw">Traditional Chinese (zh-rTW)</string>
+    <string name="language_option_zh_cn">简体中文（zh-rCN）</string>
+    <string name="language_option_zh_tw">繁體中文（zh-rTW）</string>
     <string name="language_option_en">English (en)</string>
     <string name="info_unknown_time">-</string>
     <string name="info_section_version_dynamic">App: %1$s\nVersion: %2$s (%3$d)\nRelease: %4$s</string>
@@ -334,6 +334,10 @@
     <string name="sector_no_results_suggestion">Suggestion: increase distance, switch keywords, or switch map provider and retry.</string>
     <string name="sector_show_all_results">Show all results</string>
     <string name="sector_show_unsaved_only">Show unsaved only</string>
+    <string name="sector_ready_open_details">Sector results are on map. Tap Details for list view.</string>
+    <string name="action_sector_view_details">Details</string>
+    <string name="action_back_to_map">Back to map</string>
+    <string name="action_close_sector_search">Close search</string>
     <string name="status_saved_to_current_case">Saved to current case</string>
     <string name="status_switched_origin_and_locked">Origin switched and compass locked</string>
     <string name="status_added_origin">Origin added: %1$s</string>
@@ -342,6 +346,7 @@
     <string name="status_deleted_simple">%1$s deleted</string>
     <string name="status_undo_delete">Delete undone</string>
     <string name="map_provider_unsupported">Unsupported map provider</string>
+    <string name="marker_sector_origin">Sector origin</string>
     <string name="direction_north_cn">N</string>
     <string name="direction_north_en">N</string>
     <string name="poi_detail_latitude">Lat: %1$.6f</string>

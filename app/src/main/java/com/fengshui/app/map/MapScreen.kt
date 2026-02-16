@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -311,6 +312,7 @@ fun MapScreen(
     var suppressAutoLocateOnce by remember { mutableStateOf(false) }
     var lastKnownCameraPosition by remember { mutableStateOf<CameraPosition?>(null) }
     var pendingAutoLocateToGps by remember { mutableStateOf(true) }
+    var googleSatelliteRestrictionNotified by remember { mutableStateOf(false) }
     var gpsInitializationStartMs by remember { mutableStateOf<Long?>(null) }
     val hasLocationPermission = PermissionHelper.hasLocationPermission(context)
     val gpsInitializationBlocking = pendingAutoLocateToGps && !hasRealGps && hasLocationPermission
@@ -366,6 +368,7 @@ fun MapScreen(
     val msgSectorSearchFailed = stringResource(id = R.string.sector_search_failed)
     val msgSectorFromMapCenter = stringResource(id = R.string.sector_origin_map_center_notice)
     val msgSectorSortByDistance = stringResource(id = R.string.sector_sort_distance)
+    val msgSectorReadyOpenDetails = stringResource(id = R.string.sector_ready_open_details)
     val msgArPermissionDenied = stringResource(id = R.string.ar_compass_permission_denied)
     val msgArOpenFailed = stringResource(id = R.string.ar_compass_open_failed)
     val actionArCompass = stringResource(id = R.string.action_ar_compass)
@@ -418,6 +421,9 @@ fun MapScreen(
     val msgSectorSuggestion = stringResource(id = R.string.sector_no_results_suggestion)
     val msgShowAllSectorResults = stringResource(id = R.string.sector_show_all_results)
     val msgShowUnsavedSectorResults = stringResource(id = R.string.sector_show_unsaved_only)
+    val actionSectorDetail = stringResource(id = R.string.action_sector_view_details)
+    val actionBackToMap = stringResource(id = R.string.action_back_to_map)
+    val actionCloseSectorSearch = stringResource(id = R.string.action_close_sector_search)
     val msgSavedToCurrentCase = stringResource(id = R.string.status_saved_to_current_case)
     val msgSwitchOriginLocked = stringResource(id = R.string.status_switched_origin_and_locked)
     val msgUndoDelete = stringResource(id = R.string.status_undo_delete)
@@ -450,6 +456,8 @@ fun MapScreen(
 
     fun persistCameraSnapshot(position: CameraPosition?) {
         val snapshot = position ?: return
+        if (restoreCameraPosition != null) return
+        if (pendingAutoLocateToGps && !hasRealGps) return
         val looksUninitialized =
             kotlin.math.abs(snapshot.target.latitude) < 0.000001 &&
                 kotlin.math.abs(snapshot.target.longitude) < 0.000001
@@ -662,7 +670,19 @@ fun MapScreen(
     fun buildPreferredSwitchCameraSnapshot(defaultZoom: Float = 15f): CameraPosition? {
         return mapProvider.getCameraPosition()
             ?: lastKnownCameraPosition
+            ?: MapSessionStore.loadCameraPosition(context)
             ?: buildCurrentGpsCameraSnapshot(defaultZoom)
+    }
+
+    fun fallbackGoogleSatelliteToAmap(cameraSnapshot: CameraPosition?) {
+        onMapProviderSwitch(
+            MapProviderType.AMAP,
+            cameraSnapshot ?: buildCurrentGpsCameraSnapshot() ?: MapSessionStore.loadCameraPosition(context)
+        )
+        if (!googleSatelliteRestrictionNotified) {
+            showStatus(msgGoogleSatelliteFallback)
+            googleSatelliteRestrictionNotified = true
+        }
     }
 
     fun locateToCurrentPosition(showBanner: Boolean = true, source: CameraMoveSource = CameraMoveSource.USER_MANUAL) {
@@ -697,10 +717,7 @@ fun MapScreen(
                 MapProviderSelector.isInChina(it.latitude, it.longitude)
             } == true
             if (inChina) {
-                val switchSnapshot = cameraSnapshot ?: buildCurrentGpsCameraSnapshot()
-                onMapProviderSwitch(MapProviderType.AMAP, switchSnapshot)
-                trialMessage = msgGoogleSatelliteFallback
-                showTrialDialog = true
+                fallbackGoogleSatelliteToAmap(cameraSnapshot)
                 return
             }
         }
@@ -739,12 +756,7 @@ fun MapScreen(
                 MapProviderSelector.isInChina(it.latitude, it.longitude)
             } == true
             if (inChina) {
-                onMapProviderSwitch(
-                    MapProviderType.AMAP,
-                    cameraSnapshot ?: buildCurrentGpsCameraSnapshot()
-                )
-                trialMessage = msgGoogleSatelliteFallback
-                showTrialDialog = true
+                fallbackGoogleSatelliteToAmap(cameraSnapshot)
                 return
             }
         }
@@ -964,6 +976,17 @@ fun MapScreen(
 
     fun showPoiMarkers(results: List<PoiResult>) {
         clearPoiMarkers()
+        val sectorOrigin = ui.sectorOrigin
+        if (ui.sectorOverlayVisible && sectorOrigin != null) {
+            try {
+                mapProvider.addMarker(
+                    sectorOrigin,
+                    "[ORIGIN_ACTIVE] ${context.getString(R.string.marker_sector_origin)}"
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("MapScreen", "Failed to add sector origin marker: ${e.message}")
+            }
+        }
         results.forEach { poi ->
             try {
                 val marker = mapProvider.addMarker(
@@ -1694,11 +1717,32 @@ fun MapScreen(
                         .background(Color(0xEFFFFFFF), RoundedCornerShape(12.dp))
                         .size(42.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Explore,
-                        contentDescription = stringResource(id = R.string.action_north_up),
-                        modifier = Modifier.rotate(-azimuth)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .rotate(-azimuth)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Explore,
+                            contentDescription = stringResource(id = R.string.action_north_up),
+                            tint = Color(0xFF202124),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            val northTip = Path().apply {
+                                moveTo(w * 0.5f, h * 0.08f)
+                                lineTo(w * 0.36f, h * 0.34f)
+                                lineTo(w * 0.64f, h * 0.34f)
+                                close()
+                            }
+                            drawPath(
+                                path = northTip,
+                                color = Color(0xFFD93025)
+                            )
+                        }
+                    }
                 }
                 IconButton(
                     onClick = {
@@ -3003,8 +3047,7 @@ fun MapScreen(
                         lockCompassToLatLng(originLatLng.latitude, originLatLng.longitude)
 
                         if (usingMapCenter) {
-                            trialMessage = msgSectorFromMapCenter
-                            showTrialDialog = true
+                            showStatus(msgSectorFromMapCenter)
                         }
 
                         if (config.keyword.isBlank()) {
@@ -3012,8 +3055,7 @@ fun MapScreen(
                             ui.sectorResults.clear()
                             ui.sectorNoticeCount = null
                             showPoiMarkers(emptyList())
-                            trialMessage = msgSectorNoKeywordDrawOnly
-                            showTrialDialog = true
+                            showStatus(msgSectorNoKeywordDrawOnly)
                         } else {
                             ui.sectorLoading = true
                             viewModel.runSectorSearch(
@@ -3023,9 +3065,11 @@ fun MapScreen(
                                 onResult = { results ->
                                     showPoiMarkers(results)
                                     focusOnSectorResults(results)
+                                    if (results.isNotEmpty()) {
+                                        showStatus(msgSectorReadyOpenDetails)
+                                    }
                                     if (ui.sectorRadiusLimited) {
-                                        trialMessage = msgSectorRadiusLimited
-                                        showTrialDialog = true
+                                        showStatus(msgSectorRadiusLimited)
                                     }
                                 },
                                 onError = {
@@ -3047,10 +3091,49 @@ fun MapScreen(
                 )
             }
 
+            if (
+                ui.sectorOverlayVisible &&
+                !ui.showSectorResultDialog &&
+                pendingSectorLocatePoi == null
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 148.dp, start = 12.dp, end = 12.dp)
+                        .zIndex(5f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .background(Color(0xEEFFFFFF), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (ui.sectorLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(
+                                text = stringResource(id = R.string.sector_search_loading),
+                                fontSize = 12.sp
+                            )
+                        } else {
+                            Button(
+                                onClick = { ui.showSectorResultDialog = true },
+                                modifier = Modifier.heightIn(min = 40.dp)
+                            ) {
+                                Text(actionSectorDetail, fontSize = 12.sp)
+                            }
+                            TextButton(onClick = { clearSectorArtifacts() }) {
+                                Text(actionCloseSectorSearch, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
             if (ui.showSectorResultDialog) {
                 AlertDialog(
                     onDismissRequest = {
-                        clearSectorArtifacts()
+                        ui.showSectorResultDialog = false
                     },
                     title = {
                         Text(stringResource(id = R.string.sector_result_title, ui.sectorConfigLabel))
@@ -3198,8 +3281,13 @@ fun MapScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = {
+                            ui.showSectorResultDialog = false
+                        }) { Text(actionBackToMap) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
                             clearSectorArtifacts()
-                        }) { Text(stringResource(id = R.string.action_close)) }
+                        }) { Text(actionCloseSectorSearch) }
                     }
                 )
             }
@@ -3263,7 +3351,7 @@ fun MapScreen(
                                 },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(stringResource(id = R.string.action_close))
+                                Text(actionSectorDetail)
                             }
                         }
                     }

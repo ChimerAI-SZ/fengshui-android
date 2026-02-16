@@ -120,7 +120,9 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
     fun requestMapSwitchOnly(targetProvider: MapProviderType, cameraSnapshot: CameraPosition? = null) {
         if (switchingBusy || mapProviderType == targetProvider) return
         pendingTargetProvider = targetProvider
-        pendingCameraToRestore = cameraSnapshot ?: mapProvider.getCameraPosition()
+        pendingCameraToRestore = cameraSnapshot
+            ?: mapProvider.getCameraPosition()
+            ?: MapSessionStore.loadCameraPosition(context)
         pendingUnsupportedReason = if (isProviderAvailable(targetProvider)) {
             ""
         } else {
@@ -144,6 +146,7 @@ fun MainAppScreen(modifier: Modifier = Modifier) {
                 delay(120)
                 if (pendingCameraToRestore == null) {
                     pendingCameraToRestore = mapProvider.getCameraPosition()
+                        ?: MapSessionStore.loadCameraPosition(context)
                 }
                 mapProviderTypeName = targetProvider.name
             }.onFailure {
