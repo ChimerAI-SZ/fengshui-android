@@ -115,6 +115,9 @@
     <string name="map_type_vector">Vector</string>
     <string name="map_type_satellite_short">Sat</string>
     <string name="map_type_vector_short">Map</string>
+    <string name="layer_dialog_title">Map Type</string>
+    <string name="layer_provider_section">Map Source</string>
+    <string name="layer_detail_section">Map Detail</string>
 
     <string name="label_origin">Origin</string>
     <string name="label_destination">Destination</string>

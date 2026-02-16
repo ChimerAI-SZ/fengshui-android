@@ -115,6 +115,9 @@
     <string name="map_type_vector">矢量</string>
     <string name="map_type_satellite_short">卫星</string>
     <string name="map_type_vector_short">地图</string>
+    <string name="layer_dialog_title">地圖類型</string>
+    <string name="layer_provider_section">地圖來源</string>
+    <string name="layer_detail_section">地圖詳情</string>
 
     <string name="label_origin">原点</string>
     <string name="label_destination">终点</string>

@@ -34,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.HorizontalDivider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -74,8 +75,11 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewInAr
 import com.fengshui.app.R
@@ -282,6 +286,7 @@ fun MapScreen(
     var quickMenuTarget by remember { mutableStateOf(QuickMenuTarget.NONE) }
     val quickMenuScrollState = rememberScrollState()
     val quickSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val layerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var arCompassEnabled by remember { mutableStateOf(false) }
     val destinationColorIndexById = remember { mutableStateMapOf<String, Int>() }
     val poiByMarkerId = remember { mutableMapOf<String, PoiResult>() }
@@ -291,6 +296,7 @@ fun MapScreen(
     var statusBannerMessage by remember { mutableStateOf<String?>(null) }
     var statusBannerToken by remember { mutableStateOf(0) }
     var showLayerDialog by remember { mutableStateOf(false) }
+    var layerDialogProvider by remember { mutableStateOf(mapProviderType) }
     var deviceDirectionMode by remember { mutableStateOf(false) }
     var deviceHeading by remember { mutableStateOf(0f) }
     var lastDeviceDirectionUpdateMs by remember { mutableStateOf(0L) }
@@ -486,6 +492,12 @@ fun MapScreen(
         }
     }
 
+    LaunchedEffect(showLayerDialog, mapProviderType) {
+        if (showLayerDialog) {
+            layerDialogProvider = mapProviderType
+        }
+    }
+
     DisposableEffect(deviceDirectionMode) {
         if (deviceDirectionMode) {
             sensorHelper.start()
@@ -661,16 +673,45 @@ fun MapScreen(
         }
     }
 
-    fun switchMapProvider(target: MapProviderType) {
-        val cameraSnapshot = buildPreferredSwitchCameraSnapshot()
-        if (target == mapProviderType) {
-            cameraSnapshot?.let { snapshot ->
-                mapProvider.animateCamera(snapshot)
-                lastKnownCameraPosition = snapshot
-            }
-            return
+    fun isLayerProviderEnabled(provider: MapProviderType): Boolean {
+        return when (provider) {
+            MapProviderType.AMAP -> hasAmapMap || mapProviderType == MapProviderType.AMAP
+            MapProviderType.GOOGLE -> hasGoogleMap || mapProviderType == MapProviderType.GOOGLE
         }
-        onMapProviderSwitch(target, cameraSnapshot)
+    }
+
+    fun applyLayerSelection(provider: MapProviderType, type: MapType) {
+        if (!isLayerProviderEnabled(provider)) return
+
+        currentMapType = type
+        MapSessionStore.saveMapType(context, type)
+
+        val cameraSnapshot = buildPreferredSwitchCameraSnapshot()
+        if (
+            type == MapType.SATELLITE &&
+            provider == MapProviderType.GOOGLE &&
+            hasAmapMap
+        ) {
+            val center = cameraSnapshot?.target
+            val inChina = center?.let {
+                MapProviderSelector.isInChina(it.latitude, it.longitude)
+            } == true
+            if (inChina) {
+                onMapProviderSwitch(
+                    MapProviderType.AMAP,
+                    cameraSnapshot ?: buildCurrentGpsCameraSnapshot()
+                )
+                trialMessage = msgGoogleSatelliteFallback
+                showTrialDialog = true
+                return
+            }
+        }
+
+        if (provider == mapProviderType) {
+            applyMapTypeSelection(type)
+        } else {
+            onMapProviderSwitch(provider, cameraSnapshot)
+        }
     }
 
     fun resetMapBearingToNorth() {
@@ -1710,49 +1751,200 @@ fun MapScreen(
             }
 
             if (showLayerDialog) {
-                AlertDialog(
+                ModalBottomSheet(
                     onDismissRequest = { showLayerDialog = false },
-                    title = { Text(stringResource(id = R.string.action_layer_switch)) },
-                    text = {
-                        Column {
-                            Button(
-                                onClick = {
-                                    applyMapTypeSelection(MapType.VECTOR)
-                                    showLayerDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(id = R.string.map_type_vector))
-                            }
-                            SpacerSmall()
-                            Button(
-                                onClick = {
-                                    applyMapTypeSelection(MapType.SATELLITE)
-                                    showLayerDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(id = R.string.map_type_satellite))
-                            }
-                            SpacerSmall()
-                            Button(
-                                onClick = {
-                                    switchMapProvider(MapProviderType.GOOGLE)
-                                    showLayerDialog = false
-                                },
-                                enabled = hasGoogleMap || mapProviderType == MapProviderType.GOOGLE,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(id = R.string.provider_google_map_full))
+                    sheetState = layerSheetState,
+                    containerColor = Color(0xFFFAFAFA)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.layer_dialog_title),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { showLayerDialog = false }) {
+                                Text(
+                                    text = stringResource(id = R.string.symbol_close),
+                                    fontSize = 20.sp
+                                )
                             }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showLayerDialog = false }) {
-                            Text(stringResource(id = R.string.action_close))
+
+                        Text(
+                            text = stringResource(id = R.string.layer_provider_section),
+                            fontSize = 13.sp,
+                            color = Color(0xFF70757A),
+                            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val amapEnabled = isLayerProviderEnabled(MapProviderType.AMAP)
+                            val amapSelected = layerDialogProvider == MapProviderType.AMAP
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer { alpha = if (amapEnabled) 1f else 0.45f }
+                                    .clickable(enabled = amapEnabled) {
+                                        layerDialogProvider = MapProviderType.AMAP
+                                    },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (amapSelected) Color(0xFFE7F2FF) else Color(0xFFF2F3F5),
+                                tonalElevation = if (amapSelected) 2.dp else 0.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Explore,
+                                        contentDescription = stringResource(id = R.string.provider_amap),
+                                        tint = if (amapSelected) Color(0xFF1A73E8) else Color(0xFF5F6368),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Spacer(modifier = Modifier.size(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.provider_amap),
+                                        fontSize = 13.sp,
+                                        fontWeight = if (amapSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+
+                            val googleEnabled = isLayerProviderEnabled(MapProviderType.GOOGLE)
+                            val googleSelected = layerDialogProvider == MapProviderType.GOOGLE
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer { alpha = if (googleEnabled) 1f else 0.45f }
+                                    .clickable(enabled = googleEnabled) {
+                                        layerDialogProvider = MapProviderType.GOOGLE
+                                    },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (googleSelected) Color(0xFFE7F2FF) else Color(0xFFF2F3F5),
+                                tonalElevation = if (googleSelected) 2.dp else 0.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Public,
+                                        contentDescription = stringResource(id = R.string.provider_google_map_full),
+                                        tint = if (googleSelected) Color(0xFF1A73E8) else Color(0xFF5F6368),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Spacer(modifier = Modifier.size(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.provider_google_map_full),
+                                        fontSize = 13.sp,
+                                        fontWeight = if (googleSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
                         }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 14.dp),
+                            color = Color(0x22000000)
+                        )
+
+                        Text(
+                            text = stringResource(id = R.string.layer_detail_section),
+                            fontSize = 13.sp,
+                            color = Color(0xFF70757A),
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            val vectorSelected = currentMapType == MapType.VECTOR
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        applyLayerSelection(layerDialogProvider, MapType.VECTOR)
+                                        showLayerDialog = false
+                                    },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (vectorSelected) Color(0xFFE7F2FF) else Color(0xFFF2F3F5),
+                                tonalElevation = if (vectorSelected) 2.dp else 0.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Map,
+                                        contentDescription = stringResource(id = R.string.map_type_vector),
+                                        tint = if (vectorSelected) Color(0xFF1A73E8) else Color(0xFF5F6368),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Spacer(modifier = Modifier.size(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.map_type_vector),
+                                        fontSize = 13.sp,
+                                        fontWeight = if (vectorSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+
+                            val satelliteSelected = currentMapType == MapType.SATELLITE
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        applyLayerSelection(layerDialogProvider, MapType.SATELLITE)
+                                        showLayerDialog = false
+                                    },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (satelliteSelected) Color(0xFFE7F2FF) else Color(0xFFF2F3F5),
+                                tonalElevation = if (satelliteSelected) 2.dp else 0.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SatelliteAlt,
+                                        contentDescription = stringResource(id = R.string.map_type_satellite),
+                                        tint = if (satelliteSelected) Color(0xFF1A73E8) else Color(0xFF5F6368),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Spacer(modifier = Modifier.size(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.map_type_satellite),
+                                        fontSize = 13.sp,
+                                        fontWeight = if (satelliteSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.size(12.dp))
                     }
-                )
+                }
             }
             
             // 连线绘制层（使用Canvas）
