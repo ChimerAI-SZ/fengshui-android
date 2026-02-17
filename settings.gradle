@@ -17,5 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "fengshui-tool"
+rootProject.name = "QiCompass"
 include(":app")

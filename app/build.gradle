@@ -29,8 +29,8 @@ android {
         applicationId "com.fengshui.app"
         minSdk 24
         targetSdk 34
-        versionCode 1000
-        versionName "1.0.0"
+        versionCode 1001
+        versionName "1.0.1"
         def buildTimeUtc = new Date().format("yyyy-MM-dd HH:mm:ss 'UTC'", java.util.TimeZone.getTimeZone("UTC"))
         buildConfigField "String", "BUILD_TIME_UTC", "\"${buildTimeUtc}\""
 
